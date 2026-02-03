@@ -28,7 +28,7 @@
     },
     "url": {
       "type": "string",
-      "format": "uri"
+      "pattern": "^https?://\\S+$"
     },
     "published_date": {
       "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_date"
@@ -52,4 +52,3 @@
     }
   }
 }
-

@@ -43,4 +43,3 @@ def validate_or_return_errors(instance: Any, schema_name: str) -> list[SchemaVal
     except ValidationError as e:
         return [SchemaValidationIssue(json_path=str(e.json_path), message=e.message)]
     return []
-

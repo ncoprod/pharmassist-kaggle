@@ -17,11 +17,13 @@
     },
     "iso_datetime": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
     },
     "iso_date": {
       "type": "string",
-      "format": "date"
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     },
     "language_code": {
       "type": "string",
@@ -33,4 +35,3 @@
     }
   }
 }
-
