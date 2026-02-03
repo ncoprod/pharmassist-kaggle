@@ -29,7 +29,8 @@ def extract_intake(ocr_text: str, language: Literal["fr", "en"]) -> dict[str, An
             parsed.setdefault("schema_version", SCHEMA_VERSION)
             if not validate_or_return_errors(parsed, "intake_extracted"):
                 # Defense-in-depth: ensure the model didn't echo identifiers.
-                if not scan_for_phi(parsed, path="$"):
+                violations = scan_for_phi(parsed, path="$")
+                if not any(v.severity == "BLOCKER" for v in violations):
                     return parsed
 
     return _extract_intake_fallback(ocr_text, language)
