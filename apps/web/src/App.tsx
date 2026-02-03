@@ -139,13 +139,17 @@ function App() {
               Case
               <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
             </label>
-            <button onClick={startRun} disabled={isStarting}>
+            <button onClick={startRun} disabled={isStarting} data-testid="start-run">
               {isStarting ? 'Starting...' : 'Start run'}
             </button>
           </div>
         </header>
 
-        {error ? <div className="error">{error}</div> : null}
+        {error ? (
+          <div className="error" data-testid="error-banner">
+            {error}
+          </div>
+        ) : null}
 
         <main className="grid">
           <section className="panel">
@@ -154,7 +158,9 @@ function App() {
               <div className="kv">
                 <div>
                   <span className="k">run_id</span>
-                  <span className="v mono">{run.run_id}</span>
+                  <span className="v mono" data-testid="run-id">
+                    {run.run_id}
+                  </span>
                 </div>
                 <div>
                   <span className="k">status</span>
