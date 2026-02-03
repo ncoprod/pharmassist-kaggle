@@ -148,7 +148,7 @@ def _parse_symptom_line(line: str) -> dict[str, Any] | None:
 
     # Undo common OCR spacing breaks.
     label_norm = _normalize(label_raw).replace(" ", "")
-    label = _canonical_label(label_norm)
+    label = _canonical_label(_deleet(label_norm)) or _canonical_label(label_norm)
     if not label:
         # fallback to raw, trimmed
         label = label_raw.strip()
@@ -198,6 +198,26 @@ def _canonical_label(compact_norm: str) -> str | None:
     if "bloat" in compact_norm or "ballonn" in compact_norm:
         return "bloating"
     return None
+
+
+def _deleet(text: str) -> str:
+    # Common OCR/leetspeak substitutions (helps normalize labels like "3ye5" -> "eyes").
+    return text.translate(
+        str.maketrans(
+            {
+                "0": "o",
+                "1": "i",
+                "2": "z",
+                "3": "e",
+                "4": "a",
+                "5": "s",
+                "6": "g",
+                "7": "t",
+                "8": "b",
+                "9": "g",
+            }
+        )
+    )
 
 
 def _normalize(text: str) -> str:

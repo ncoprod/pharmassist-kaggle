@@ -12,3 +12,9 @@ def test_a1_fallback_extraction_is_schema_valid_for_ocr_suite():
             assert validate_instance(out, "intake_extracted") is None
             assert out["symptoms"], "expected at least one symptom"
 
+
+def test_a1_canonicalizes_noisy_itchy_eyes_label():
+    bundle = load_case_bundle("case_000042")
+    out = extract_intake(bundle["intake_text_ocr"]["fr"], "fr")
+    labels = [s.get("label") for s in out["symptoms"] if isinstance(s, dict)]
+    assert "itchy eyes" in labels
