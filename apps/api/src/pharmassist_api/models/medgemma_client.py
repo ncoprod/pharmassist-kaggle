@@ -77,6 +77,7 @@ def medgemma_extract_json(
     )
 
     inputs = tokenizer(instruction, return_tensors="pt")
+    input_len = inputs["input_ids"].shape[-1]
     try:
         outputs = model.generate(
             **inputs,
@@ -87,7 +88,7 @@ def medgemma_extract_json(
     except Exception:
         return None
 
-    text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    # `generate` returns prompt+completion; only decode newly generated tokens.
+    text = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True)
     # Return raw text; parsing happens in the step wrapper.
     return {"_raw": text}
-
