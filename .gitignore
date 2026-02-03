@@ -8,6 +8,8 @@ dist/
 build/
 node_modules/
 *.egg-info/
+.data/
+*.db
 .DS_Store
 .env*
 *.log
