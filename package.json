@@ -1,0 +1,13 @@
+{
+  "name": "pharmassist-kaggle",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "web:dev": "npm -w apps/web run dev",
+    "web:build": "npm -w apps/web run build",
+    "web:lint": "npm -w apps/web run lint"
+  }
+}
+

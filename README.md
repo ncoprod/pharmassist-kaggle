@@ -9,9 +9,28 @@ Key principles:
 
 ## Quick Start (WIP)
 
-This repo is being built right now. Initial setup will be documented here as we implement the demo.
+Prereqs:
+- Python 3.10+
+- Node 20+ (any recent LTS is fine)
+
+Local dev:
+
+```bash
+make setup
+
+# terminal 1
+make api-dev
+
+# terminal 2
+make web-dev
+```
+
+Health check:
+
+```bash
+curl http://localhost:8000/healthz
+```
 
 ## License
 
 This repository is open source (see `LICENSE`).
-
