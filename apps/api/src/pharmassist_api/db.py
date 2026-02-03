@@ -27,6 +27,8 @@ def _connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")
+    # Avoid transient "database is locked" errors under light concurrency.
+    conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
 
 

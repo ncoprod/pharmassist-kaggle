@@ -4,7 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -60,7 +60,7 @@ async def create_run(req: RunCreateRequest) -> dict[str, Any]:
 def get_run(run_id: str) -> dict[str, Any]:
     run = db.get_run(run_id)
     if not run:
-        return {"run_id": run_id, "status": "not_found"}
+        raise HTTPException(status_code=404, detail="Run not found")
     return run
 
 
@@ -76,8 +76,15 @@ async def run_events(
     """
 
     async def event_iter() -> Any:
+        # Use Last-Event-ID for seamless browser reconnects.
+        after_id = after
+        if after_id == 0:
+            last = request.headers.get("last-event-id")
+            if last and last.isdigit():
+                after_id = int(last)
+
         # 1) Replay history from DB (useful on refresh/reconnect).
-        for item in db.list_events(run_id, after_id=after):
+        for item in db.list_events(run_id, after_id=after_id):
             eid = int(item["id"])
             data = dict(item["data"])
             yield dumps_sse(data, event_id=eid, event=str(data.get("type") or "message"))

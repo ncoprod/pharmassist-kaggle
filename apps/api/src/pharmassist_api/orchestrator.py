@@ -49,7 +49,7 @@ def emit_event(run_id: str, event_type: str, payload: dict[str, Any]) -> int:
     ts = payload.get("ts") or _now_iso()
     event_payload = {**payload, "ts": ts, "type": event_type}
     event_id = db.insert_event(run_id, event_type, event_payload)
-    _publish(run_id, event_id=event_id, data={"event_id": str(uuid.uuid4()), **event_payload})
+    _publish(run_id, event_id=event_id, data=event_payload)
     return event_id
 
 
@@ -121,6 +121,9 @@ async def run_pipeline(run_id: str) -> None:
         "finalized",
         {"message": "Run completed (synthetic demo).", "ts": _now_iso()},
     )
+
+    # Queue is only needed for live streaming; completed runs can replay from DB.
+    _RUN_QUEUES.pop(run_id, None)
 
 
 def dumps_sse(

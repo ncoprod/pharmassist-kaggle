@@ -30,11 +30,13 @@ function App() {
   const [events, setEvents] = useState<Array<{ id: number; data: RunEvent }>>([])
   const [error, setError] = useState<string | null>(null)
   const esRef = useRef<EventSource | null>(null)
+  const seenIdsRef = useRef<Set<number>>(new Set())
 
   async function startRun() {
     setError(null)
     setRun(null)
     setEvents([])
+    seenIdsRef.current = new Set()
 
     const resp = await fetch(`${apiBase}/runs`, {
       method: 'POST',
@@ -55,30 +57,30 @@ function App() {
     const es = new EventSource(`${apiBase}/runs/${r.run_id}/events`)
     esRef.current = es
 
-    es.onmessage = (evt) => {
-      // We rely on typed events most of the time, but keep onmessage for safety.
+    function pushEvent(evt: MessageEvent<string>) {
       try {
+        const id = Number.parseInt(evt.lastEventId || '0', 10) || Date.now()
+        if (seenIdsRef.current.has(id)) return
+        seenIdsRef.current.add(id)
+
         const data = JSON.parse(evt.data) as RunEvent
-        setEvents((prev) => prev.concat([{ id: Date.now(), data }]))
+        setEvents((prev) => prev.concat([{ id, data }]))
       } catch {
-        // ignore
+        // ignore bad event payloads
       }
     }
 
     es.addEventListener('step_started', (evt) => {
       const e = evt as MessageEvent<string>
-      const data = JSON.parse(e.data) as RunEvent
-      setEvents((prev) => prev.concat([{ id: Date.now(), data }]))
+      pushEvent(e)
     })
     es.addEventListener('step_completed', (evt) => {
       const e = evt as MessageEvent<string>
-      const data = JSON.parse(e.data) as RunEvent
-      setEvents((prev) => prev.concat([{ id: Date.now(), data }]))
+      pushEvent(e)
     })
     es.addEventListener('finalized', async (evt) => {
       const e = evt as MessageEvent<string>
-      const data = JSON.parse(e.data) as RunEvent
-      setEvents((prev) => prev.concat([{ id: Date.now(), data }]))
+      pushEvent(e)
 
       es.close()
       esRef.current = null
