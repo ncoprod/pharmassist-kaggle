@@ -1,0 +1,97 @@
+{
+  "case_ref": "case_000042",
+  "intake_extracted": {
+    "presenting_problem": "Sneezing and itchy eyes for one week",
+    "red_flags": [],
+    "schema_version": "0.0.0",
+    "symptoms": [
+      {
+        "duration_days": 7,
+        "label": "sneezing",
+        "severity": "moderate"
+      },
+      {
+        "duration_days": 7,
+        "label": "itchy eyes",
+        "severity": "mild"
+      }
+    ]
+  },
+  "intake_text_ocr": {
+    "en": "PPATIENT NOTE (OCR)\nAge: 21 years\nSex: F\nCCief complaint: Sneezing and itchy eyesfor one week\n5ymptoms:\n\n- snee zing (mode\nrate, 7d)\n- i tchy eyes (mi ld, 7d)\nC0ntextt\nAll egies: pollen (rhin1tis)\nConditions\n: seasonal allergic rhiniti s\nCurrent meds: metf0rmin (Rx)\n",
+    "fr": "NOTE PATIENT (O  CR)\nAge: 21 ans\nSexe: F\nMotif:  Eternuemen ts et yex qui gratten depuis 1 s emaine\nSympto  mes :\n- sneezing (moderate, 7j)\n- itchy 3ye5 (mild, 7j)\nContexte:\nAllergies: pollen (rhiitis)\nAntecedents: s easonaalallergi rhinitis\nTraitement: metformiin (Rx)\n"
+  },
+  "llm_context": {
+    "allergies": [
+      {
+        "reaction": "rhinitis",
+        "severity": "mild",
+        "substance": "pollen"
+      }
+    ],
+    "conditions": [
+      {
+        "label": "seasonal allergic rhinitis"
+      }
+    ],
+    "current_medications": [
+      {
+        "is_prescription": true,
+        "name": "metformin"
+      }
+    ],
+    "demographics": {
+      "age_years": 21,
+      "sex": "F"
+    },
+    "schema_version": "0.0.0"
+  },
+  "products": [
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [
+        "pregnancy_unknown"
+      ],
+      "in_stock": true,
+      "ingredients": [
+        "cetirizine"
+      ],
+      "name": "Cetirizine 10mg (example)",
+      "price_eur": 4.99,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0001",
+      "stock_qty": 12
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "sodium_chloride"
+      ],
+      "name": "Saline nasal spray (example)",
+      "price_eur": 3.5,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0002",
+      "stock_qty": 8
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "derm",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "glycerin"
+      ],
+      "name": "Moisturizing cream (example)",
+      "price_eur": 7.9,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0003",
+      "stock_qty": 5
+    }
+  ],
+  "schema_version": "0.0.0",
+  "seed": 42
+}

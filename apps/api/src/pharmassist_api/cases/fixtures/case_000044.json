@@ -1,0 +1,86 @@
+{
+  "case_ref": "case_000044",
+  "intake_extracted": {
+    "presenting_problem": "Occasional bloating after meals",
+    "red_flags": [],
+    "schema_version": "0.0.0",
+    "symptoms": [
+      {
+        "duration_days": 10,
+        "label": "bloating",
+        "severity": "mild"
+      }
+    ]
+  },
+  "intake_text_ocr": {
+    "en": "PATIENTNOTE (OOCR)\nAg3: 8 4 years\nSex: M\nChieff complaint: Occsi0nal blo ating after  meals\nSymptoms:\n- bloating (mi1d, 10d)\nConntext:\nConditions:  mild dige\nstive discomfort\nCurrent mmeds: aracetamo l (OTC)\n",
+    "fr": "NOTE PATIENT (OCR)\nAge: 8 ans\nSexe: M\nMotif: Ballonnements oc\ncasionn3ls appr3\ns les  rpas \nSymptomes:\n- bl0at1ng (mild, 10j)\nContxte:\nAntecedents: mild digestive discomfort\nTrait ements: paracetamol (OTC)\n"
+  },
+  "llm_context": {
+    "allergies": [],
+    "conditions": [
+      {
+        "label": "mild digestive discomfort"
+      }
+    ],
+    "current_medications": [
+      {
+        "is_prescription": false,
+        "name": "paracetamol"
+      }
+    ],
+    "demographics": {
+      "age_years": 84,
+      "sex": "M"
+    },
+    "schema_version": "0.0.0"
+  },
+  "products": [
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [
+        "pregnancy_unknown"
+      ],
+      "in_stock": true,
+      "ingredients": [
+        "cetirizine"
+      ],
+      "name": "Cetirizine 10mg (example)",
+      "price_eur": 4.99,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0001",
+      "stock_qty": 12
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "sodium_chloride"
+      ],
+      "name": "Saline nasal spray (example)",
+      "price_eur": 3.5,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0002",
+      "stock_qty": 8
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "derm",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "glycerin"
+      ],
+      "name": "Moisturizing cream (example)",
+      "price_eur": 7.9,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0003",
+      "stock_qty": 5
+    }
+  ],
+  "schema_version": "0.0.0",
+  "seed": 44
+}

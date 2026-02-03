@@ -1,0 +1,86 @@
+{
+  "case_ref": "case_000043",
+  "intake_extracted": {
+    "presenting_problem": "Dry skin and mild itching",
+    "red_flags": [],
+    "schema_version": "0.0.0",
+    "symptoms": [
+      {
+        "duration_days": 14,
+        "label": "dry skin",
+        "severity": "mild"
+      }
+    ]
+  },
+  "intake_text_ocr": {
+    "en": "PATIENT NOTE (OCR)\nAge: 4 years\nS  ex: F\nChief complaint: DDr\ny sk\nin and mild itching\nSymptoms:\n- dry skin (mild, 14d)\nContext:\nConditions: dry skin\nCurrent meds:  ibuprofen (OTC)\n",
+    "fr": "NTE PATIENT (OCR)\nAge:  54 ans\nSex3:\n F  \nMoti: P eau seche et demangeaisons leg3res\nSymptoms:\n- dry skin (mild, 14j)\nContexte:\nAntecedents: d  ry skin\nT raitements: ibbuprofen (OTC)\n"
+  },
+  "llm_context": {
+    "allergies": [],
+    "conditions": [
+      {
+        "label": "dry skin"
+      }
+    ],
+    "current_medications": [
+      {
+        "is_prescription": false,
+        "name": "ibuprofen"
+      }
+    ],
+    "demographics": {
+      "age_years": 54,
+      "sex": "F"
+    },
+    "schema_version": "0.0.0"
+  },
+  "products": [
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [
+        "pregnancy_unknown"
+      ],
+      "in_stock": true,
+      "ingredients": [
+        "cetirizine"
+      ],
+      "name": "Cetirizine 10mg (example)",
+      "price_eur": 4.99,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0001",
+      "stock_qty": 12
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "sodium_chloride"
+      ],
+      "name": "Saline nasal spray (example)",
+      "price_eur": 3.5,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0002",
+      "stock_qty": 8
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "derm",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "glycerin"
+      ],
+      "name": "Moisturizing cream (example)",
+      "price_eur": 7.9,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0003",
+      "stock_qty": 5
+    }
+  ],
+  "schema_version": "0.0.0",
+  "seed": 43
+}
