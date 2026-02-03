@@ -4,16 +4,20 @@ import asyncio
 import json
 import uuid
 from datetime import UTC, datetime
+from hashlib import sha256
 from typing import Any
 
 from . import db
+from .cases.load_case import load_case_bundle
+from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi
+from .steps.a1_intake_extraction import extract_intake
 
 SCHEMA_VERSION = "0.0.0"
 
 # Day 3: stubbed pipeline. Day 4+ will implement real steps behind these names.
 PIPELINE_STEPS = [
-    "A1_intake_extraction",
     "A2_phi_scrubber",
+    "A1_intake_extraction",
     "A3_triage",
     "A5_safety",
     "A4_evidence_retrieval",
@@ -76,6 +80,27 @@ async def run_pipeline(run_id: str) -> None:
     if not run:
         return
 
+    # Load synthetic case bundle (Kaggle demo). Never persist raw OCR text in DB/events.
+    try:
+        bundle = load_case_bundle(run["input"]["case_ref"])
+    except Exception:
+        db.update_run(run_id, status="failed_safe", policy_violations=[])
+        emit_event(
+            run_id,
+            "finalized",
+            {"message": "Run failed: unknown case_ref (synthetic demo).", "ts": _now_iso()},
+        )
+        _RUN_QUEUES.pop(run_id, None)
+        return
+
+    language = run["input"]["language"]
+    ocr_text = (bundle.get("intake_text_ocr") or {}).get(language) or ""
+    if isinstance(ocr_text, str):
+        ocr_sha = sha256(ocr_text.encode("utf-8")).hexdigest()[:12]
+    else:
+        ocr_sha = "na"
+    ocr_len = len(ocr_text) if isinstance(ocr_text, str) else 0
+
     db.update_run(run_id, status="running")
     emit_event(
         run_id,
@@ -83,14 +108,60 @@ async def run_pipeline(run_id: str) -> None:
         {"step": "pipeline", "message": "Run started (synthetic demo).", "ts": _now_iso()},
     )
 
+    intake_extracted: dict[str, Any] | None = None
+
     for step in PIPELINE_STEPS:
         emit_event(
             run_id,
             "step_started",
             {"step": step, "message": f"Starting {step}.", "ts": _now_iso()},
         )
-        # Simulate work; keeps the UI feeling alive without heavy computation.
-        await asyncio.sleep(0.25)
+
+        if step == "A2_phi_scrubber":
+            # Hard-stop PHI boundary (defense-in-depth).
+            try:
+                raise_if_phi(str(ocr_text), "$.intake_text_ocr")
+            except PhiBoundaryError as e:
+                violations = [
+                    {
+                        "code": v.code,
+                        "severity": v.severity,
+                        "json_path": v.json_path,
+                        "message": v.message,
+                    }
+                    for v in e.violations
+                ]
+                db.update_run(run_id, status="failed_safe", policy_violations=violations)
+                emit_event(
+                    run_id,
+                    "policy_violation",
+                    {
+                        "step": step,
+                        "message": "PHI boundary triggered; stopping safely.",
+                        "ocr_len": ocr_len,
+                        "ocr_sha256_12": ocr_sha,
+                        "violations": violations,
+                        "ts": _now_iso(),
+                    },
+                )
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run failed_safe (PHI detected).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+            await asyncio.sleep(0.1)
+
+        elif step == "A1_intake_extraction":
+            intake_extracted = extract_intake(str(ocr_text), language)
+            await asyncio.sleep(0.1)
+
+        else:
+            # Simulate work; keeps the UI feeling alive without heavy computation.
+            await asyncio.sleep(0.25)
+
         emit_event(
             run_id,
             "step_completed",
@@ -98,9 +169,19 @@ async def run_pipeline(run_id: str) -> None:
         )
 
     # Placeholder artifacts (Day 8+ will render real report/handout).
+    symptoms_line = ""
+    if isinstance(intake_extracted, dict):
+        labels = []
+        for s in intake_extracted.get("symptoms") or []:
+            if isinstance(s, dict) and isinstance(s.get("label"), str):
+                labels.append(s["label"])
+        if labels:
+            symptoms_line = "- Extracted symptoms: " + ", ".join(labels) + "\n"
+
     report_md = (
         "# Pharmacist report (synthetic)\n\n"
         "- Scope: OTC/parapharmacy decision support only.\n"
+        f"{symptoms_line}"
         "- Note: Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n"
     )
     handout_md = (
