@@ -42,6 +42,11 @@ app.add_middleware(
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
+@app.get("/")
+def root() -> dict[str, str]:
+    # Avoid confusion during local dev (people will hit `/` first).
+    return {"status": "ok", "healthz": "/healthz", "docs": "/docs"}
+
 
 @app.post("/runs")
 async def create_run(req: RunCreateRequest) -> dict[str, Any]:

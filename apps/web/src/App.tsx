@@ -29,6 +29,7 @@ function App() {
   const [run, setRun] = useState<Run | null>(null)
   const [events, setEvents] = useState<Array<{ id: number; data: RunEvent }>>([])
   const [error, setError] = useState<string | null>(null)
+  const [isStarting, setIsStarting] = useState(false)
   const esRef = useRef<EventSource | null>(null)
   const seenIdsRef = useRef<Set<number>>(new Set())
 
@@ -37,62 +38,73 @@ function App() {
     setRun(null)
     setEvents([])
     seenIdsRef.current = new Set()
+    setIsStarting(true)
 
-    const resp = await fetch(`${apiBase}/runs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ case_ref: caseRef, language, trigger: 'manual' }),
-    })
+    try {
+      const resp = await fetch(`${apiBase}/runs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ case_ref: caseRef, language, trigger: 'manual' }),
+      })
 
-    if (!resp.ok) {
-      setError(`Failed to start run (${resp.status})`)
-      return
-    }
-
-    const r = (await resp.json()) as Run
-    setRun(r)
-
-    // Subscribe to SSE.
-    esRef.current?.close()
-    const es = new EventSource(`${apiBase}/runs/${r.run_id}/events`)
-    esRef.current = es
-
-    function pushEvent(evt: MessageEvent<string>) {
-      try {
-        const id = Number.parseInt(evt.lastEventId || '0', 10) || Date.now()
-        if (seenIdsRef.current.has(id)) return
-        seenIdsRef.current.add(id)
-
-        const data = JSON.parse(evt.data) as RunEvent
-        setEvents((prev) => prev.concat([{ id, data }]))
-      } catch {
-        // ignore bad event payloads
+      if (!resp.ok) {
+        setError(`Failed to start run (${resp.status}).`)
+        return
       }
-    }
 
-    es.addEventListener('step_started', (evt) => {
-      const e = evt as MessageEvent<string>
-      pushEvent(e)
-    })
-    es.addEventListener('step_completed', (evt) => {
-      const e = evt as MessageEvent<string>
-      pushEvent(e)
-    })
-    es.addEventListener('finalized', async (evt) => {
-      const e = evt as MessageEvent<string>
-      pushEvent(e)
+      const r = (await resp.json()) as Run
+      setRun(r)
 
-      es.close()
-      esRef.current = null
+      // Subscribe to SSE.
+      esRef.current?.close()
+      const es = new EventSource(`${apiBase}/runs/${r.run_id}/events`)
+      esRef.current = es
 
-      // Refresh run details (artifacts).
-      const runResp = await fetch(`${apiBase}/runs/${r.run_id}`)
-      if (runResp.ok) setRun((await runResp.json()) as Run)
-    })
+      function pushEvent(evt: MessageEvent<string>) {
+        try {
+          const id = Number.parseInt(evt.lastEventId || '0', 10) || Date.now()
+          if (seenIdsRef.current.has(id)) return
+          seenIdsRef.current.add(id)
 
-    es.onerror = () => {
-      // Avoid spamming errors; user can retry.
-      setError('SSE connection error (is the API running?)')
+          const data = JSON.parse(evt.data) as RunEvent
+          setEvents((prev) => prev.concat([{ id, data }]))
+        } catch {
+          // ignore bad event payloads
+        }
+      }
+
+      es.addEventListener('step_started', (evt) => {
+        const e = evt as MessageEvent<string>
+        pushEvent(e)
+      })
+      es.addEventListener('step_completed', (evt) => {
+        const e = evt as MessageEvent<string>
+        pushEvent(e)
+      })
+      es.addEventListener('finalized', async (evt) => {
+        const e = evt as MessageEvent<string>
+        pushEvent(e)
+
+        es.close()
+        esRef.current = null
+
+        // Refresh run details (artifacts).
+        try {
+          const runResp = await fetch(`${apiBase}/runs/${r.run_id}`)
+          if (runResp.ok) setRun((await runResp.json()) as Run)
+        } catch {
+          // ignore refresh failure
+        }
+      })
+
+      es.onerror = () => {
+        // Avoid spamming errors; user can retry.
+        setError(`SSE connection error (API: ${apiBase}).`)
+      }
+    } catch {
+      setError(`Cannot reach API at ${apiBase}. Start it with: make api-dev`)
+    } finally {
+      setIsStarting(false)
     }
   }
 
@@ -124,7 +136,9 @@ function App() {
               Case
               <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
             </label>
-            <button onClick={startRun}>Start run</button>
+            <button onClick={startRun} disabled={isStarting}>
+              {isStarting ? 'Starting...' : 'Start run'}
+            </button>
           </div>
         </header>
 
