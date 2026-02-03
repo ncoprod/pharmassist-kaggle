@@ -23,5 +23,13 @@ dev = [
   "httpx>=0.27,<0.28"
 ]
 
+# Optional ML stack (not installed in CI). Used when PHARMASSIST_USE_MEDGEMMA=1.
+ml = [
+  "accelerate>=1,<2",
+  "safetensors>=0.4,<1",
+  "torch>=2.2,<3",
+  "transformers>=4.45,<5"
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
