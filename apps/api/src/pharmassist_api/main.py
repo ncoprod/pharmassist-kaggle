@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI
@@ -45,7 +45,7 @@ def healthz() -> dict[str, str]:
 @app.post("/runs", response_model=RunCreateResponse)
 def create_run(_req: RunCreateRequest) -> RunCreateResponse:
     run_id = str(uuid.uuid4())
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     _RUNS[run_id] = {"run_id": run_id, "status": "created", "created_at": created_at}
     return RunCreateResponse(run_id=run_id, status="created", created_at=created_at)
 
@@ -53,4 +53,3 @@ def create_run(_req: RunCreateRequest) -> RunCreateResponse:
 @app.get("/runs/{run_id}")
 def get_run(run_id: str) -> dict[str, Any]:
     return _RUNS.get(run_id) or {"run_id": run_id, "status": "not_found"}
-
