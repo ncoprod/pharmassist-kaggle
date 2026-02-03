@@ -1,26 +1,31 @@
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
-from typing import Any
+import asyncio
+from contextlib import asynccontextmanager
+from typing import Any, Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from pharmassist_api import db
+from pharmassist_api.contracts.validate_schema import validate_instance
+from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run, run_pipeline
 
 
 class RunCreateRequest(BaseModel):
-    # Day 1 stub: Day 3+ will introduce canonical schemas + full pipeline.
-    intake_text: str | None = None
+    case_ref: str = "case_000042"
+    language: Literal["fr", "en"] = "fr"
+    trigger: Literal["manual", "import", "ocr_upload", "scheduled_refresh"] = "manual"
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    db.init_db()
+    yield
 
 
-class RunCreateResponse(BaseModel):
-    run_id: str
-    status: str
-    created_at: str
-
-
-app = FastAPI(title="PharmAssist Kaggle Demo API", version="0.0.0")
+app = FastAPI(title="PharmAssist Kaggle Demo API", version="0.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,23 +38,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory placeholder; Day 3 will add persistence (SQLite) + SSE.
-_RUNS: dict[str, dict[str, Any]] = {}
-
-
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/runs", response_model=RunCreateResponse)
-def create_run(_req: RunCreateRequest) -> RunCreateResponse:
-    run_id = str(uuid.uuid4())
-    created_at = datetime.now(UTC).isoformat()
-    _RUNS[run_id] = {"run_id": run_id, "status": "created", "created_at": created_at}
-    return RunCreateResponse(run_id=run_id, status="created", created_at=created_at)
+@app.post("/runs")
+async def create_run(req: RunCreateRequest) -> dict[str, Any]:
+    run = new_run(case_ref=req.case_ref, language=req.language, trigger=req.trigger)
+
+    # Ensure our API output follows the canonical contract early.
+    validate_instance(run, "run")
+
+    # Kick off the background pipeline.
+    asyncio.create_task(run_pipeline(run["run_id"]))
+
+    return run
 
 
 @app.get("/runs/{run_id}")
 def get_run(run_id: str) -> dict[str, Any]:
-    return _RUNS.get(run_id) or {"run_id": run_id, "status": "not_found"}
+    run = db.get_run(run_id)
+    if not run:
+        return {"run_id": run_id, "status": "not_found"}
+    return run
+
+
+@app.get("/runs/{run_id}/events")
+async def run_events(
+    run_id: str,
+    request: Request,
+    after: int = Query(default=0, ge=0),
+) -> StreamingResponse:
+    """Server-Sent Events stream for run progress.
+
+    Day 3: in-process SSE; assumes a single server process (OK for Kaggle demo).
+    """
+
+    async def event_iter() -> Any:
+        # 1) Replay history from DB (useful on refresh/reconnect).
+        for item in db.list_events(run_id, after_id=after):
+            eid = int(item["id"])
+            data = dict(item["data"])
+            yield dumps_sse(data, event_id=eid, event=str(data.get("type") or "message"))
+
+        # 2) Subscribe to live events.
+        q = get_queue(run_id)
+        while True:
+            if await request.is_disconnected():
+                break
+
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=15)
+            except TimeoutError:
+                # Keep-alive comment.
+                yield ": keep-alive\n\n"
+                continue
+
+            eid = int(msg["id"])
+            data = dict(msg["data"])
+            yield dumps_sse(data, event_id=eid, event=str(data.get("type") or "message"))
+
+            if data.get("type") == "finalized":
+                break
+
+    return StreamingResponse(
+        event_iter(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
