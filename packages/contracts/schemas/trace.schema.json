@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/trace.schema.json",
+  "title": "Agentic Trace (redacted, no raw prompts)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trace_id", "run_id", "events"],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "trace_id": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/uuid"
+    },
+    "run_id": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/uuid"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/event_step_started" },
+          { "$ref": "#/$defs/event_step_completed" },
+          { "$ref": "#/$defs/event_tool_call" },
+          { "$ref": "#/$defs/event_tool_result" },
+          { "$ref": "#/$defs/event_rule_fired" },
+          { "$ref": "#/$defs/event_policy_violation" },
+          { "$ref": "#/$defs/event_finalized" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "json_path", "message"],
+      "properties": {
+        "code": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        },
+        "severity": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/severity"
+        },
+        "json_path": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "event_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "ts"],
+      "properties": {
+        "event_id": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/uuid"
+        },
+        "ts": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_datetime"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "step_started",
+            "step_completed",
+            "tool_call",
+            "tool_result",
+            "rule_fired",
+            "policy_violation",
+            "finalized"
+          ]
+        },
+        "step": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "args_redacted": {
+          "type": "object"
+        },
+        "result_summary": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "rule_id": {
+          "type": "string"
+        },
+        "violation": {
+          "$ref": "#/$defs/violation"
+        },
+        "severity": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/severity"
+        }
+      }
+    },
+    "event_step_started": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "step"],
+          "properties": { "type": { "const": "step_started" } }
+        }
+      ]
+    },
+    "event_step_completed": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "step"],
+          "properties": { "type": { "const": "step_completed" } }
+        }
+      ]
+    },
+    "event_tool_call": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "step", "tool_name"],
+          "properties": { "type": { "const": "tool_call" } }
+        }
+      ]
+    },
+    "event_tool_result": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "step", "tool_name"],
+          "properties": { "type": { "const": "tool_result" } }
+        }
+      ]
+    },
+    "event_rule_fired": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "step", "rule_id"],
+          "properties": { "type": { "const": "rule_fired" } }
+        }
+      ]
+    },
+    "event_policy_violation": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "violation"],
+          "properties": { "type": { "const": "policy_violation" } }
+        }
+      ]
+    },
+    "event_finalized": {
+      "allOf": [
+        { "$ref": "#/$defs/event_base" },
+        {
+          "type": "object",
+          "required": ["type", "message"],
+          "properties": { "type": { "const": "finalized" } }
+        }
+      ]
+    }
+  }
+}
+

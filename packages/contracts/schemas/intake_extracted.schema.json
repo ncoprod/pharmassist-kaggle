@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/intake_extracted.schema.json",
+  "title": "Intake Extracted (structured from untrusted text)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "presenting_problem", "symptoms", "red_flags"],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "presenting_problem": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "symptoms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["mild", "moderate", "severe", "unknown"]
+          },
+          "duration_days": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "red_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
+

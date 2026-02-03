@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/recommendation.schema.json",
+  "title": "Recommendation (ranked products + safety + follow-up)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ranked_products",
+    "safety_warnings",
+    "follow_up_questions",
+    "confidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "ranked_products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["product_sku", "score_0_100", "why"],
+        "properties": {
+          "product_sku": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "score_0_100": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "why": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "safety_warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "severity"],
+        "properties": {
+          "code": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "severity": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/severity"
+          },
+          "related_product_sku": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "follow_up_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question"],
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommended", "reason", "suggested_service"],
+      "properties": {
+        "recommended": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "suggested_service": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        }
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}
+

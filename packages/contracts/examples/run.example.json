@@ -1,0 +1,51 @@
+{
+  "schema_version": "0.0.0",
+  "run_id": "3f0e3a9d-4d3c-4e4a-8d7e-2f6c2a3f9d1b",
+  "created_at": "2026-02-03T19:30:00Z",
+  "status": "completed",
+  "input": {
+    "case_ref": "case_000042",
+    "language": "fr",
+    "trigger": "manual"
+  },
+  "artifacts": {
+    "report_markdown": "# Pharmacist report (synthetic)\n\nThis is an OTC/parapharmacy decision support demo.\n\nImportant: Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n",
+    "handout_markdown": "# Patient handout (synthetic)\n\n- Follow the pharmacist instructions.\n- If symptoms worsen, consult a doctor.\n",
+    "trace": {
+      "schema_version": "0.0.0",
+      "trace_id": "8c9b1c2d-3e4f-4a5b-8c9d-1e2f3a4b5c6d",
+      "run_id": "3f0e3a9d-4d3c-4e4a-8d7e-2f6c2a3f9d1b",
+      "events": [
+        {
+          "event_id": "a1111111-2222-4333-8444-555555555555",
+          "ts": "2026-02-03T19:30:01Z",
+          "type": "step_started",
+          "step": "A1_intake_extraction",
+          "message": "Starting extraction from untrusted intake text (synthetic)."
+        },
+        {
+          "event_id": "e1111111-2222-4333-8444-555555555555",
+          "ts": "2026-02-03T19:30:05Z",
+          "type": "finalized",
+          "message": "Run completed (synthetic demo)."
+        }
+      ]
+    },
+    "recommendation": {
+      "schema_version": "0.0.0",
+      "ranked_products": [
+        {
+          "product_sku": "SKU-0001",
+          "score_0_100": 92,
+          "why": "Best match for sneezing/itchy eyes with good tolerability (synthetic example).",
+          "evidence_refs": ["ev_0001"]
+        }
+      ],
+      "safety_warnings": [],
+      "follow_up_questions": [],
+      "confidence": 0.72
+    }
+  },
+  "policy_violations": []
+}
+

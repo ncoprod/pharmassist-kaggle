@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/product.schema.json",
+  "title": "Product (OTC/Parapharmacy)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sku", "name", "category", "in_stock"],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "sku": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "name": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "category": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "ingredients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "contraindication_tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "price_eur": {
+      "type": "number",
+      "minimum": 0
+    },
+    "in_stock": {
+      "type": "boolean"
+    },
+    "stock_qty": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}
+

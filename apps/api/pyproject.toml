@@ -12,6 +12,7 @@ dependencies = [
   "fastapi>=0.115,<0.116",
   "uvicorn[standard]>=0.30,<0.31",
   "pydantic>=2.9,<3",
+  "jsonschema>=4.22,<5",
   "python-dotenv>=1.0,<2"
 ]
 

@@ -1,4 +1,5 @@
 .PHONY: help setup api-install api-dev api-lint web-install web-dev web-build web-lint lint build
+.PHONY: validate
 
 PYTHON ?= python3
 VENV_DIR := .venv
@@ -40,3 +41,6 @@ web-lint:
 lint: api-lint web-lint
 
 build: web-build
+
+validate: $(VENV_DIR)
+	$(VENV_DIR)/bin/python -m pharmassist_api.scripts.validate_contracts
