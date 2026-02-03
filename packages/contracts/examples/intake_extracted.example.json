@@ -1,0 +1,18 @@
+{
+  "schema_version": "0.0.0",
+  "presenting_problem": "Sneezing and itchy eyes for one week",
+  "symptoms": [
+    {
+      "label": "sneezing",
+      "severity": "moderate",
+      "duration_days": 7
+    },
+    {
+      "label": "itchy eyes",
+      "severity": "mild",
+      "duration_days": 7
+    }
+  ],
+  "red_flags": []
+}
+

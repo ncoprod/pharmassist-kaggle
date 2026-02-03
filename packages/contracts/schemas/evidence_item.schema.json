@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/evidence_item.schema.json",
+  "title": "Evidence Item (retrieved source + summary)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "title",
+    "publisher",
+    "url",
+    "summary",
+    "retrieved_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "evidence_id": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "title": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "publisher": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "published_date": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_date"
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "quote_snippet": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "retrieved_at": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_datetime"
+    },
+    "license": {
+      "type": "string"
+    },
+    "level_of_evidence": {
+      "type": "string"
+    }
+  }
+}
+

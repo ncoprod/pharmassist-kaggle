@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.0.0",
+  "sku": "SKU-0001",
+  "name": "Cetirizine 10mg (example)",
+  "brand": "ExampleBrand",
+  "category": "allergy",
+  "ingredients": ["cetirizine"],
+  "contraindication_tags": ["pregnancy_unknown"],
+  "price_eur": 4.99,
+  "in_stock": true,
+  "stock_qty": 12
+}
+

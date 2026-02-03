@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.0.0",
+  "evidence_id": "ev_0001",
+  "title": "Allergic rhinitis: general management principles (example)",
+  "publisher": "Public guideline (example)",
+  "url": "https://example.com/allergic-rhinitis-guidance",
+  "published_date": "2024-01-15",
+  "summary": "General non-prescription management includes allergen avoidance and symptomatic relief (synthetic example).",
+  "quote_snippet": "Symptomatic relief may be considered as first-line for mild cases.",
+  "retrieved_at": "2026-02-03T19:30:00Z",
+  "license": "example",
+  "level_of_evidence": "guideline"
+}
+

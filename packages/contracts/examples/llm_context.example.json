@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.0.0",
+  "demographics": {
+    "age_years": 34,
+    "sex": "F"
+  },
+  "allergies": [
+    {
+      "substance": "pollen",
+      "reaction": "rhinitis",
+      "severity": "mild"
+    }
+  ],
+  "conditions": [
+    {
+      "label": "seasonal allergic rhinitis"
+    }
+  ],
+  "current_medications": [
+    {
+      "name": "paracetamol",
+      "is_prescription": false
+    }
+  ]
+}
+

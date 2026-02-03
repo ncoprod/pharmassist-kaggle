@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/llm_context.schema.json",
+  "title": "LLM Context (PHI-scrubbed allowlist)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "demographics",
+    "allergies",
+    "conditions",
+    "current_medications"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "demographics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["age_years", "sex"],
+      "properties": {
+        "age_years": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 130
+        },
+        "sex": {
+          "type": "string",
+          "enum": ["F", "M", "X", "U"]
+        }
+      }
+    },
+    "allergies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["substance"],
+        "properties": {
+          "substance": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "reaction": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["mild", "moderate", "severe", "unknown"]
+          }
+        }
+      }
+    },
+    "conditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label"],
+        "properties": {
+          "label": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "system": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "current_medications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "is_prescription": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "pregnancy_status": {
+      "type": "string",
+      "enum": ["pregnant", "not_pregnant", "unknown"]
+    },
+    "notes_clinical": {
+      "type": "string",
+      "maxLength": 2000
+    }
+  }
+}
+

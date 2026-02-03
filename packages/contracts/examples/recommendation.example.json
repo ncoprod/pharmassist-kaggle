@@ -1,0 +1,33 @@
+{
+  "schema_version": "0.0.0",
+  "ranked_products": [
+    {
+      "product_sku": "SKU-0001",
+      "score_0_100": 92,
+      "why": "Best match for sneezing/itchy eyes with good tolerability (synthetic example).",
+      "evidence_refs": ["ev_0001"]
+    }
+  ],
+  "safety_warnings": [
+    {
+      "code": "PREGNANCY_STATUS_UNKNOWN",
+      "message": "Pregnancy status is unknown. Confirm before recommending if relevant.",
+      "severity": "WARN",
+      "related_product_sku": "SKU-0001"
+    }
+  ],
+  "follow_up_questions": [
+    {
+      "question": "Are you pregnant or breastfeeding?",
+      "reason": "Some products require extra caution depending on pregnancy/breastfeeding.",
+      "priority": 1
+    }
+  ],
+  "escalation": {
+    "recommended": false,
+    "reason": "No red flags in this synthetic example.",
+    "suggested_service": "GP"
+  },
+  "confidence": 0.72
+}
+

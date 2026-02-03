@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/run.schema.json",
+  "title": "Run (pipeline state + artifacts)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "created_at",
+    "status",
+    "input",
+    "artifacts",
+    "policy_violations"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "run_id": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/uuid"
+    },
+    "created_at": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_datetime"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["created", "running", "needs_more_info", "completed", "failed_safe", "failed"]
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_ref", "language", "trigger"],
+      "properties": {
+        "case_ref": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        },
+        "language": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/language_code"
+        },
+        "trigger": {
+          "type": "string",
+          "enum": ["manual", "import", "ocr_upload", "scheduled_refresh"]
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_markdown": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "handout_markdown": {
+          "type": "string",
+          "maxLength": 20000
+        },
+        "trace": {
+          "$ref": "pharmassist://contracts/trace.schema.json"
+        },
+        "recommendation": {
+          "$ref": "pharmassist://contracts/recommendation.schema.json"
+        }
+      }
+    },
+    "policy_violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "json_path", "message"],
+        "properties": {
+          "code": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "severity": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/severity"
+          },
+          "json_path": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      }
+    }
+  }
+}
+
