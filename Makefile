@@ -26,7 +26,7 @@ api-lint: $(VENV_DIR)
 	$(VENV_DIR)/bin/ruff check apps/api/src
 
 web-install:
-	npm install
+	npm ci
 
 web-dev:
 	npm -w apps/web run dev

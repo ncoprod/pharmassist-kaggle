@@ -10,7 +10,7 @@ Key principles:
 ## Quick Start (WIP)
 
 Prereqs:
-- Python 3.10+
+- Python 3.11+
 - Node 20+ (any recent LTS is fine)
 
 Local dev:

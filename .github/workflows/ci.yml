@@ -19,6 +19,9 @@ jobs:
       - name: Lint
         run: |
           python -m ruff check apps/api/src
+      - name: Test
+        run: |
+          python -m pytest -q apps/api/tests
 
   web:
     runs-on: ubuntu-latest
@@ -28,9 +31,8 @@ jobs:
         with:
           node-version: "20"
       - name: Install
-        run: npm install
+        run: npm ci
       - name: Lint
         run: npm -w apps/web run lint
       - name: Build
         run: npm -w apps/web run build
-
