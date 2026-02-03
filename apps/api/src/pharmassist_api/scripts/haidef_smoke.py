@@ -79,13 +79,15 @@ def _run_causal(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
     model.to(device)
 
     inputs = tok(prompt, return_tensors="pt").to(device)
+    input_len = inputs["input_ids"].shape[-1]
     out = model.generate(
         **inputs,
         max_new_tokens=max_new_tokens,
         do_sample=False,
         temperature=0.0,
     )
-    return tok.decode(out[0], skip_special_tokens=True)
+    # `generate` returns prompt+completion; only decode newly generated tokens.
+    return tok.decode(out[0][input_len:], skip_special_tokens=True)
 
 
 def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
@@ -100,13 +102,14 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
     model.to(device)
 
     inputs = tok(prompt, return_tensors="pt").to(device)
+    input_len = inputs["input_ids"].shape[-1]
     out = model.generate(
         **inputs,
         max_new_tokens=max_new_tokens,
         do_sample=False,
         temperature=0.0,
     )
-    return tok.decode(out[0], skip_special_tokens=True)
+    return tok.decode(out[0][input_len:], skip_special_tokens=True)
 
 
 def main() -> int:
@@ -159,4 +162,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
