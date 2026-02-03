@@ -102,7 +102,10 @@ function App() {
         setError(`SSE connection error (API: ${apiBase}).`)
       }
     } catch {
-      setError(`Cannot reach API at ${apiBase}. Start it with: make api-dev`)
+      const origin = window.location.origin
+      setError(
+        `Cannot reach API at ${apiBase} (network/CORS). UI origin: ${origin}. If the API is running, check CORS allowlist.`,
+      )
     } finally {
       setIsStarting(false)
     }
