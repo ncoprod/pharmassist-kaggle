@@ -85,6 +85,26 @@ def _extract_intake_fallback(ocr_text: str, language: Literal["fr", "en"]) -> di
         )
         has_bloating = has_bloating or ("bloat" in labels_compact) or ("ballonn" in labels_compact)
 
+    # If OCR broke some structured lines, we might parse only a subset of symptoms.
+    # Merge coarse flags into the parsed list to avoid missing obvious symptoms.
+    if symptoms:
+        present_compact: set[str] = set()
+        for s in symptoms:
+            if isinstance(s, dict) and isinstance(s.get("label"), str):
+                present_compact.add(_normalize(s["label"]).replace(" ", ""))
+
+        def _has(label_key: str) -> bool:
+            return any(label_key in x for x in present_compact)
+
+        if has_sneezing and not (_has("sneez") or _has("eternu")):
+            symptoms.append({"label": "sneezing", "severity": "unknown"})
+        if has_itchy_eyes and not (_has("itchyeyes") or (_has("itchy") and _has("eye"))):
+            symptoms.append({"label": "itchy eyes", "severity": "unknown"})
+        if has_dry_skin and not (_has("dryskin") or _has("peausech")):
+            symptoms.append({"label": "dry skin", "severity": "unknown"})
+        if has_bloating and not (_has("bloat") or _has("ballonn")):
+            symptoms.append({"label": "bloating", "severity": "unknown"})
+
     # If OCR noise broke the structured lines, build symptoms from coarse flags.
     if not symptoms:
         if has_sneezing:

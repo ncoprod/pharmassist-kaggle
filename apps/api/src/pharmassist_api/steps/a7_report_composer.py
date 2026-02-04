@@ -149,10 +149,15 @@ def _render_report_template(
         if language == "en"
         else "Aide a la decision OTC/parapharmacie uniquement."
     )
+    note = (
+        "Do not change prescription treatment without medical advice."
+        if language == "en"
+        else "Ne modifiez pas votre traitement sur ordonnance sans avis medical."
+    )
 
     lines: list[str] = [title, ""]
     lines.append(f"- Scope: {scope}")
-    lines.append("- Note: Ne modifiez pas votre traitement sur ordonnance sans avis medical.")
+    lines.append(f"- Note: {note}")
     lines.append("")
 
     lines.append("## Summary" if language == "en" else "## Synthese")

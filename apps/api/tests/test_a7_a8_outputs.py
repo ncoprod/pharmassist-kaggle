@@ -68,6 +68,7 @@ def test_report_and_handout_are_policy_safe_and_citations_valid():
         language="en",
     )
     assert report.strip()
+    assert "Do not change prescription treatment without medical advice." in report
     assert not lint_rx_advice(report, path="$.report_markdown")
 
     evidence_ids = {e["evidence_id"] for e in evidence_items}

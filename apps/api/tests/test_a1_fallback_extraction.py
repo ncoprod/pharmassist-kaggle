@@ -18,3 +18,11 @@ def test_a1_canonicalizes_noisy_itchy_eyes_label():
     out = extract_intake(bundle["intake_text_ocr"]["fr"], "fr")
     labels = [s.get("label") for s in out["symptoms"] if isinstance(s, dict)]
     assert "itchy eyes" in labels
+
+
+def test_a1_fallback_recovers_sneezing_even_if_ocr_breaks_lines():
+    bundle = load_case_bundle("case_000042")
+    out = extract_intake(bundle["intake_text_ocr"]["en"], "en")
+    labels = [s.get("label") for s in out["symptoms"] if isinstance(s, dict)]
+    assert "sneezing" in labels
+    assert "itchy eyes" in labels
