@@ -501,8 +501,18 @@ function App() {
             )}
           </section>
 
-          <section className="panel">
-            <div className="panelTitle">Artifacts (placeholder)</div>
+          <section className="panel printPanel">
+            <div className="panelTitleRow">
+              <div className="panelTitle">Artifacts</div>
+              <button
+                className="printBtn"
+                onClick={() => window.print()}
+                disabled={!run || run.status !== 'completed'}
+                data-testid="print"
+              >
+                {runLanguage === 'fr' ? 'Imprimer' : 'Print'}
+              </button>
+            </div>
             <div className="artifact">
               <div className="artifactTitle">Report</div>
               <pre className="mono pre">{run?.artifacts?.report_markdown ?? '—'}</pre>
