@@ -79,6 +79,63 @@ PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.haidef_smoke \
   --max-new-tokens 256
 ```
 
+### Kaggle Notebook (recommended, no venv)
+
+Kaggle images often ship with `torch`/`transformers` preinstalled and may not
+support `python -m venv` (`ensurepip` can fail). The safest path is to **avoid
+venv** and run from source via `PYTHONPATH`.
+
+Suggested notebook cells (in order):
+
+```python
+# 1) Clone
+!git clone https://github.com/ncoprod/pharmassist-kaggle.git
+%cd /kaggle/working/pharmassist-kaggle
+```
+
+```python
+# 2) Load HF token from Kaggle Secrets (create a secret named "HF_TOKEN")
+from kaggle_secrets import UserSecretsClient
+import os
+
+os.environ["HF_TOKEN"] = UserSecretsClient().get_secret("HF_TOKEN")
+print("HF_TOKEN loaded:", bool(os.environ.get("HF_TOKEN")))
+```
+
+```python
+# 3) Cache models under /kaggle/working so subsequent runs reuse downloads
+import os
+os.environ["HF_HOME"] = "/kaggle/working/hf"
+```
+
+```python
+# 4) (Optional) Install only missing deps (avoid editable installs in Kaggle)
+import importlib, subprocess, sys
+
+need = []
+for pkg in ["transformers", "accelerate", "safetensors", "jsonschema"]:
+    try:
+        importlib.import_module(pkg)
+    except Exception:
+        need.append(pkg)
+
+if need:
+    print("Installing:", need)
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *need])
+else:
+    print("All deps already present")
+```
+
+```python
+# 5) Run MedGemma extraction smoke test (validates JSON against schema)
+!PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.haidef_smoke \
+  --model google/medgemma-4b-it \
+  --mode conditional \
+  --case-ref case_000042 \
+  --language en \
+  --max-new-tokens 256
+```
+
 ## Running the API with MedGemma enabled (optional)
 
 By default, the API uses the deterministic fallback extractor.
