@@ -1,16 +1,24 @@
 # PharmAssist AI — Kaggle MedGemma Impact Challenge
 
-Synthetic-only demo application for the **Kaggle MedGemma Impact Challenge (2026)**.
+Synthetic-only, privacy-first demo application for the **Kaggle MedGemma Impact Challenge (2026)**.
 
-Key principles:
-- Uses **MedGemma / HAI-DEF** models (mandatory for Kaggle).
-- Demonstrates an **agentic workflow** (tool-calling + trace).
-- **No real patient data**. Synthetic data only.
+What this repo demonstrates:
+- **Strict contracts**: JSON Schemas + golden examples.
+- **Policy validators**: PHI boundary (hard-stop) + Rx advice linting.
+- **Agentic workflow**: a step-by-step orchestrator with an audit trace + SSE progress in the UI.
+- **HAI-DEF usage**: optional model-backed intake extraction with **MedGemma**, with a deterministic fallback
+  so CI stays fast and reproducible.
+- **No real patient data**: synthetic cases only.
 
-## Quick Start (WIP)
+Repo layout:
+- `packages/contracts/`: canonical JSON Schemas + examples
+- `apps/api/`: FastAPI orchestrator + pipeline steps
+- `apps/web/`: Vite UI (start run + SSE progress)
+
+## Local Dev (no model download)
 
 Prereqs:
-- Python 3.11+
+- Python 3.10+
 - Node 20+ (any recent LTS is fine)
 
 Local dev:
@@ -25,10 +33,65 @@ make api-dev
 make web-dev
 ```
 
-Health check:
+API health check:
 
 ```bash
 curl http://localhost:8000/healthz
+```
+
+## Tests (must stay green)
+
+```bash
+make lint
+make validate
+.venv/bin/pytest -q
+make e2e
+```
+
+## MedGemma / HAI-DEF smoke test (GPU recommended)
+
+The Kaggle challenge requires using at least one HAI-DEF model. For this demo we
+use **MedGemma** for `OCR/noisy text -> strict JSON extraction` behind a flag and
+provide a deterministic fallback for CI.
+
+This smoke test runs directly on a synthetic OCR fixture and validates the JSON
+against the `intake_extracted` schema.
+
+Notes:
+- `google/medgemma-4b-it` is an **image-text-to-text** model. The script runs it
+  in *text-only* mode using the official `AutoProcessor` +
+  `AutoModelForImageTextToText` API.
+- It downloads multiple GB of weights. Prefer running it on **Kaggle GPU**
+  (Kaggle GPU hours are limited; budget accordingly).
+- You must set `HF_TOKEN` (the model is gated on Hugging Face).
+
+Run:
+
+```bash
+# Requires GPU + HF token in env:
+# export HF_TOKEN=...
+
+PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.haidef_smoke \
+  --model google/medgemma-4b-it \
+  --mode conditional \
+  --case-ref case_000042 \
+  --language en \
+  --max-new-tokens 256
+```
+
+## Running the API with MedGemma enabled (optional)
+
+By default, the API uses the deterministic fallback extractor.
+
+To enable model-backed extraction:
+
+```bash
+# install optional deps (not installed in CI)
+.venv/bin/pip install -e "apps/api[ml]"
+
+export PHARMASSIST_USE_MEDGEMMA=1
+export PHARMASSIST_MEDGEMMA_MODEL=google/medgemma-4b-it
+make api-dev
 ```
 
 ## License
