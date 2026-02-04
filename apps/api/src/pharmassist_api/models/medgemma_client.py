@@ -184,3 +184,55 @@ def medgemma_extract_json(
         return None
 
     return {"_raw": text}
+
+
+def medgemma_generate_text(
+    *,
+    user_content: str,
+    system: str,
+    max_new_tokens: int = 700,
+) -> str | None:
+    """Best-effort text generation with MedGemma (optional, env-flagged).
+
+    Used for report/handout composition on Kaggle GPU. Never required for CI.
+    """
+    if not _enabled():
+        return None
+
+    try:
+        proc, model, mode, device = _load_model()
+    except Exception:
+        return None
+
+    try:
+        if mode == "conditional":
+            import torch  # type: ignore
+
+            messages = [
+                {"role": "system", "content": [{"type": "text", "text": system}]},
+                {"role": "user", "content": [{"type": "text", "text": user_content}]},
+            ]
+            inputs = proc.apply_chat_template(  # type: ignore[attr-defined]
+                messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            ).to(model.device)  # type: ignore[union-attr]
+            input_len = inputs["input_ids"].shape[-1]
+
+            with torch.inference_mode():
+                out = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+            return proc.decode(out[0][input_len:], skip_special_tokens=True)  # type: ignore[attr-defined]
+
+        prompt = _format_chat_prompt(proc, system + "\n\n" + user_content)  # type: ignore[arg-type]
+        inputs = proc(prompt, return_tensors="pt")  # type: ignore[operator]
+        try:
+            inputs = inputs.to(device)
+        except Exception:
+            pass
+        input_len = inputs["input_ids"].shape[-1]
+        out = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
+        return proc.decode(out[0][input_len:], skip_special_tokens=True)  # type: ignore[attr-defined]
+    except Exception:
+        return None

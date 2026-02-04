@@ -16,6 +16,8 @@ from .steps.a3_triage import triage_and_followup
 from .steps.a4_evidence_retrieval import retrieve_evidence
 from .steps.a5_safety import compute_safety_warnings
 from .steps.a6_product_ranker import rank_products
+from .steps.a7_report_composer import compose_report_markdown
+from .steps.a8_handout import compose_handout_markdown
 
 SCHEMA_VERSION = "0.0.0"
 
@@ -401,6 +403,36 @@ async def run_pipeline(run_id: str) -> None:
 
             await asyncio.sleep(0.1)
 
+        elif step == "A7_report_composer":
+            if not isinstance(intake_extracted, dict):
+                db.update_run(run_id, status="failed_safe", policy_violations=[])
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run failed_safe (missing intake_extracted).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+            report_md = compose_report_markdown(
+                intake_extracted=intake_extracted,
+                recommendation=recommendation if isinstance(recommendation, dict) else None,
+                evidence_items=artifacts.get("evidence_items")
+                if isinstance(artifacts.get("evidence_items"), list)
+                else None,
+                language=language,
+            )
+            artifacts["report_markdown"] = report_md
+            await asyncio.sleep(0.1)
+
+        elif step == "A8_handout":
+            handout_md = compose_handout_markdown(
+                recommendation=recommendation if isinstance(recommendation, dict) else None,
+                language=language,
+            )
+            artifacts["handout_markdown"] = handout_md
+            await asyncio.sleep(0.1)
+
         else:
             # Simulate work; keeps the UI feeling alive without heavy computation.
             await asyncio.sleep(0.25)
@@ -411,7 +443,7 @@ async def run_pipeline(run_id: str) -> None:
             {"step": step, "message": f"Completed {step}.", "ts": _now_iso()},
         )
 
-    # Placeholder artifacts (Day 8+ will render real report/handout).
+    # Fallback placeholder artifacts (only if a step didn't set them).
     symptoms_line = ""
     if isinstance(intake_extracted, dict):
         labels = []
@@ -421,20 +453,19 @@ async def run_pipeline(run_id: str) -> None:
         if labels:
             symptoms_line = "- Extracted symptoms: " + ", ".join(labels) + "\n"
 
-    report_md = (
-        "# Pharmacist report (synthetic)\n\n"
-        "- Scope: OTC/parapharmacy decision support only.\n"
-        f"{symptoms_line}"
-        "- Note: Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n"
-    )
-    handout_md = (
-        "# Patient handout (synthetic)\n\n"
-        "- Suivez les conseils du pharmacien.\n"
-        "- Si aggravation ou symptomes inhabituels: consultez un medecin.\n"
-    )
-
-    artifacts["report_markdown"] = report_md
-    artifacts["handout_markdown"] = handout_md
+    if "report_markdown" not in artifacts:
+        artifacts["report_markdown"] = (
+            "# Pharmacist report (synthetic)\n\n"
+            "- Scope: OTC/parapharmacy decision support only.\n"
+            f"{symptoms_line}"
+            "- Note: Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n"
+        )
+    if "handout_markdown" not in artifacts:
+        artifacts["handout_markdown"] = (
+            "# Patient handout (synthetic)\n\n"
+            "- Suivez les conseils du pharmacien.\n"
+            "- Si aggravation ou symptomes inhabituels: consultez un medecin.\n"
+        )
 
     db.update_run(run_id, status="completed", artifacts=artifacts, policy_violations=[])
 
