@@ -1,9 +1,18 @@
 import os
 
 from fastapi.testclient import TestClient
+import pytest
 
 
-def test_create_run_rejects_phi_in_follow_up_answers(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "email test@example.com",
+        "Nom: Martin",
+        "Telephone: 0612345678",
+    ],
+)
+def test_create_run_rejects_phi_in_follow_up_answers(answer, tmp_path, monkeypatch):
     monkeypatch.setenv("PHARMASSIST_DB_PATH", str(tmp_path / "test.db"))
 
     from pharmassist_api.main import app
@@ -16,7 +25,7 @@ def test_create_run_rejects_phi_in_follow_up_answers(tmp_path, monkeypatch):
                 "language": "fr",
                 "trigger": "manual",
                 "follow_up_answers": [
-                    {"question_id": "q_duration", "answer": "email test@example.com"}
+                    {"question_id": "q_duration", "answer": answer}
                 ],
             },
         )
@@ -26,4 +35,3 @@ def test_create_run_rejects_phi_in_follow_up_answers(tmp_path, monkeypatch):
         assert payload["detail"]["error"] == "PHI detected in follow_up_answers"
 
     os.environ.pop("PHARMASSIST_DB_PATH", None)
-
