@@ -68,6 +68,12 @@
         "intake_extracted": {
           "$ref": "pharmassist://contracts/intake_extracted.schema.json"
         },
+        "evidence_items": {
+          "type": "array",
+          "items": {
+            "$ref": "pharmassist://contracts/evidence_item.schema.json"
+          }
+        },
         "report_markdown": {
           "type": "string",
           "maxLength": 20000
