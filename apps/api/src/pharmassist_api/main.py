@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from pharmassist_api import db
 from pharmassist_api.contracts.validate_schema import validate_instance
 from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run_with_answers, run_pipeline
+from pharmassist_api.validators.phi_scanner import scan_for_phi
 
 
 class FollowUpAnswer(BaseModel):
@@ -63,6 +64,26 @@ async def create_run(req: RunCreateRequest) -> dict[str, Any]:
     follow_up_answers = (
         [a.model_dump() for a in req.follow_up_answers] if req.follow_up_answers else None
     )
+    if follow_up_answers:
+        violations = scan_for_phi(follow_up_answers, path="$.follow_up_answers")
+        blockers = [v for v in violations if v.severity == "BLOCKER"]
+        if blockers:
+            # Do not persist identifier-like content from untrusted UI input.
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "PHI detected in follow_up_answers",
+                    "violations": [
+                        {
+                            "code": v.code,
+                            "severity": v.severity,
+                            "json_path": v.json_path,
+                            "message": v.message,
+                        }
+                        for v in blockers
+                    ],
+                },
+            )
     run = new_run_with_answers(
         case_ref=req.case_ref,
         language=req.language,

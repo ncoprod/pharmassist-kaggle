@@ -31,6 +31,18 @@ _QUESTION_BANK: dict[str, dict[str, Any]] = {
             "en": "Fever may indicate infection or the need for medical evaluation.",
         },
     },
+    "q_temperature": {
+        "priority": 2,
+        "answer_type": "number",
+        "question": {
+            "fr": "Temperature maximale (°C) ?",
+            "en": "Max temperature (°C)?",
+        },
+        "reason": {
+            "fr": "Une temperature elevee (>= 39°C) est un signe d'alerte.",
+            "en": "High temperature (>= 39°C) is a red flag.",
+        },
+    },
     "q_breathing": {
         "priority": 1,
         "answer_type": "yes_no",
@@ -156,7 +168,9 @@ def _answers_to_map(follow_up_answers: list[dict[str, Any]] | None) -> dict[str,
         qid = item.get("question_id")
         ans = item.get("answer")
         if isinstance(qid, str) and qid and isinstance(ans, str):
-            out[qid] = ans
+            ans = ans.strip()
+            if ans:
+                out[qid] = ans
     return out
 
 
@@ -212,6 +226,10 @@ def _generate_follow_up_questions(
     preg = llm_context.get("pregnancy_status") if isinstance(llm_context, dict) else None
     if sex == "F" and preg is None:
         needed_ids.add("q_pregnancy")
+
+    # If fever is present, we need the max temperature to assess high fever (>= 39C).
+    if _is_yes(answers.get("q_fever")) and "q_temperature" not in answers:
+        needed_ids.add("q_temperature")
 
     # Remove answered questions.
     needed_ids = {qid for qid in needed_ids if qid not in answers}
@@ -287,26 +305,26 @@ def _detect_red_flags(text_blob_norm: str, answers: dict[str, str]) -> set[str]:
     if _is_yes(answers.get("q_chest_pain")):
         rf.add("RF_CHEST_PAIN")
 
-    # Fever >= 39 is a red flag if clearly present.
-    fever_ans = answers.get("q_fever", "")
-    if _is_yes(fever_ans) and _contains_high_fever_number(fever_ans):
+    # Fever >= 39C is a red flag if a temperature was provided.
+    temp_c = _parse_temperature_c(answers.get("q_temperature"))
+    if temp_c is not None and temp_c >= 39.0:
         rf.add("RF_HIGH_FEVER")
 
     return rf
 
 
-def _contains_high_fever_number(text: str) -> bool:
-    # Accept "39", "39.5", ">=39", etc.
-    m = re.search(r"(\d{2})(?:[.,](\d))?", text)
-    if not m:
-        return False
+def _parse_temperature_c(text: str | None) -> float | None:
+    if not text:
+        return None
+    t = text.strip().replace(",", ".")
     try:
-        whole = int(m.group(1))
-        frac = int(m.group(2)) if m.group(2) is not None else 0
+        value = float(t)
     except ValueError:
-        return False
-    temp10 = whole * 10 + frac
-    return temp10 >= 390
+        return None
+    # Sanity bounds for human body temperature.
+    if 30.0 <= value <= 45.0:
+        return value
+    return None
 
 
 def _is_yes(text: str | None) -> bool:

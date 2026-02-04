@@ -82,3 +82,30 @@ def test_triage_no_follow_up_when_answers_present():
     assert needs_more_info is False
     assert reco["follow_up_questions"] == []
 
+
+def test_high_fever_temperature_triggers_red_flag():
+    intake = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "Fever and fatigue",
+        "symptoms": [{"label": "fever", "severity": "unknown"}],
+        "red_flags": [],
+    }
+    llm_context = {"demographics": {"age_years": 30, "sex": "M"}, "schema_version": "0.0.0"}
+
+    answers = [
+        {"question_id": "q_fever", "answer": "yes"},
+        {"question_id": "q_temperature", "answer": "39.5"},
+    ]
+
+    updated, reco, needs_more_info = triage_and_followup(
+        intake_extracted=intake,
+        llm_context=llm_context,
+        follow_up_answers=answers,
+        language="en",
+    )
+
+    validate_instance(updated, "intake_extracted")
+    validate_instance(reco, "recommendation")
+    assert needs_more_info is False
+    assert "RF_HIGH_FEVER" in updated["red_flags"]
+    assert reco.get("escalation", {}).get("recommended") is True
