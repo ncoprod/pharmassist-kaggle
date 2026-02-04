@@ -116,6 +116,30 @@ def test_triage_low_info_blocks_until_min_questions_answered():
     assert needs_more_info2 is False
 
 
+def test_triage_low_info_detects_ocr_spaced_unspecified_label():
+    # Some OCR paths introduce spacing inside tokens (e.g. "unspec  ified").
+    intake = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "unspecified",
+        "symptoms": [{"label": "unspec  ified symptom", "severity": "unknown"}],
+        "red_flags": [],
+    }
+    llm_context = {"demographics": {"age_years": 21, "sex": "F"}, "schema_version": "0.0.0"}
+
+    updated, reco, needs_more_info, _meta = triage_and_followup(
+        intake_extracted=intake,
+        llm_context=llm_context,
+        follow_up_answers=None,
+        language="en",
+    )
+
+    validate_instance(updated, "intake_extracted")
+    validate_instance(reco, "recommendation")
+    assert needs_more_info is True
+    qids = {q["question_id"] for q in reco["follow_up_questions"]}
+    assert {"q_duration", "q_fever", "q_breathing"} <= qids
+
+
 def test_high_fever_temperature_triggers_red_flag():
     intake = {
         "schema_version": "0.0.0",
