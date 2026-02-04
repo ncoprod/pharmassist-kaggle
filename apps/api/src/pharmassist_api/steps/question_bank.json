@@ -1,0 +1,98 @@
+{
+  "schema_version": "0.0.0",
+  "bank": {
+    "q_duration": {
+      "priority": 1,
+      "answer_type": "number",
+      "tags": ["general", "timeline"],
+      "question": {
+        "fr": "Depuis combien de jours ?",
+        "en": "How many days?"
+      },
+      "reason": {
+        "fr": "La duree aide a differencier une situation benigne d'un probleme a evaluer.",
+        "en": "Duration helps distinguish self-limited issues from those needing evaluation."
+      }
+    },
+    "q_fever": {
+      "priority": 2,
+      "answer_type": "yes_no",
+      "tags": ["general", "infection_screen"],
+      "question": {
+        "fr": "Avez-vous de la fievre ?",
+        "en": "Do you have fever?"
+      },
+      "reason": {
+        "fr": "La fievre peut orienter vers une infection ou une evaluation medicale.",
+        "en": "Fever may indicate infection or the need for medical evaluation."
+      }
+    },
+    "q_temperature": {
+      "priority": 2,
+      "answer_type": "number",
+      "tags": ["fever_detail"],
+      "question": {
+        "fr": "Temperature maximale (C) ?",
+        "en": "Max temperature (C)?"
+      },
+      "reason": {
+        "fr": "Une temperature elevee (>= 39C) est un signe d'alerte.",
+        "en": "High temperature (>= 39C) is a red flag."
+      }
+    },
+    "q_breathing": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["red_flag", "respiratory"],
+      "question": {
+        "fr": "Avez-vous une gene respiratoire ?",
+        "en": "Any breathing difficulty?"
+      },
+      "reason": {
+        "fr": "Une gene respiratoire est un signe d'alerte.",
+        "en": "Breathing difficulty is a red flag."
+      }
+    },
+    "q_chest_pain": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["red_flag", "cardio"],
+      "question": {
+        "fr": "Douleur thoracique ?",
+        "en": "Chest pain?"
+      },
+      "reason": {
+        "fr": "La douleur thoracique est un signe d'alerte.",
+        "en": "Chest pain is a red flag."
+      }
+    },
+    "q_pregnancy": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["safety", "pregnancy"],
+      "question": {
+        "fr": "Etes-vous enceinte ?",
+        "en": "Are you pregnant?"
+      },
+      "reason": {
+        "fr": "Certains produits necessitent des precautions en cas de grossesse.",
+        "en": "Some products require caution in pregnancy."
+      }
+    },
+    "q_allergy_severity": {
+      "priority": 4,
+      "answer_type": "choice",
+      "choices": ["mild", "moderate", "severe"],
+      "tags": ["allergy", "severity"],
+      "question": {
+        "fr": "Vos symptomes sont-ils plutot legers, moderes ou severes ?",
+        "en": "Are your symptoms mild, moderate, or severe?"
+      },
+      "reason": {
+        "fr": "L'intensite oriente le conseil et les signes d'alerte.",
+        "en": "Severity helps guide advice and red-flag assessment."
+      }
+    }
+  }
+}
+

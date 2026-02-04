@@ -242,7 +242,7 @@ async def run_pipeline(run_id: str) -> None:
                 _RUN_QUEUES.pop(run_id, None)
                 return
 
-            intake_extracted, recommendation, needs_more_info = triage_and_followup(
+            intake_extracted, recommendation, needs_more_info, triage_meta = triage_and_followup(
                 intake_extracted=intake_extracted,
                 llm_context=bundle.get("llm_context") or {},
                 follow_up_answers=(
@@ -253,6 +253,45 @@ async def run_pipeline(run_id: str) -> None:
             artifacts["intake_extracted"] = intake_extracted
             artifacts["recommendation"] = recommendation
             await asyncio.sleep(0.1)
+
+            # Audit-friendly: follow-up selector (optional, safe metadata only).
+            sel = None
+            if isinstance(triage_meta, dict):
+                maybe_sel = triage_meta.get("followup_selector")
+                if isinstance(maybe_sel, dict):
+                    sel = maybe_sel
+
+            if isinstance(sel, dict) and sel.get("attempted") is True:
+                raw_candidate_ids = sel.get("candidate_ids")
+                candidate_ids = raw_candidate_ids if isinstance(raw_candidate_ids, list) else []
+
+                raw_selected_ids = sel.get("selected_ids")
+                selected_ids = raw_selected_ids if isinstance(raw_selected_ids, list) else []
+                emit_event(
+                    run_id,
+                    "tool_call",
+                    {
+                        "step": step,
+                        "tool_name": "followup_selector",
+                        "args_redacted": {
+                            "max_k": sel.get("max_k", 5),
+                            "candidate_count": len(candidate_ids),
+                            "candidate_ids": candidate_ids,
+                        },
+                    },
+                )
+                emit_event(
+                    run_id,
+                    "tool_result",
+                    {
+                        "step": step,
+                        "tool_name": "followup_selector",
+                        "result_summary": (
+                            f"mode={sel.get('mode')} selected={len(selected_ids)} "
+                            f"ids={','.join([str(x) for x in selected_ids])}"
+                        )[:500],
+                    },
+                )
 
             # Audit-friendly events: which rules fired?
             for rf in intake_extracted.get("red_flags") or []:
