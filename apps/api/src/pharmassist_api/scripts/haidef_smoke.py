@@ -65,25 +65,40 @@ def _build_user_content(ocr_text: str, language: Literal["fr", "en"]) -> str:
         f"{schema_hint}\n"
         f"Language: {language}\n"
         "Return ONLY the JSON object.\n"
+        "The output MUST start with '{' and end with '}'.\n"
         "\n"
         "OCR TEXT:\n"
         f"{ocr_text}\n"
     )
 
 
-def _format_chat_prompt(tok: Any, user_content: str) -> str:
-    # Prefer model-provided chat template when available (Gemma/MedGemma IT models).
+def _tokenize_chat(tok: Any, user_content: str) -> dict[str, Any]:
+    """Tokenize a system+user chat in the most compatible way."""
     system = (
         "You are a medical information extraction system. "
         "Output MUST be a single JSON object and nothing else."
     )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_content},
+    ]
+
     if hasattr(tok, "apply_chat_template"):
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_content},
-        ]
-        return tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    return system + "\n\n" + user_content
+        # Newer Transformers support returning tensors directly.
+        try:
+            out = tok.apply_chat_template(
+                messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+            )
+            return {"input_ids": out}
+        except TypeError:
+            # Fallback: render string then tokenize.
+            rendered = tok.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            return tok(rendered, return_tensors="pt")
+
+    rendered = system + "\n\n" + user_content
+    return tok(rendered, return_tensors="pt")
 
 
 def _pick_device() -> str:
@@ -104,18 +119,18 @@ def _run_causal(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
     dtype = torch.float16 if device in ("cuda", "mps") else torch.float32
 
     tok = AutoTokenizer.from_pretrained(model_id)
-    prompt = _format_chat_prompt(tok, prompt)
-
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype)
     model.to(device)
 
-    inputs = tok(prompt, return_tensors="pt").to(device)
+    inputs = _tokenize_chat(tok, prompt)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     input_len = inputs["input_ids"].shape[-1]
     out = model.generate(
         **inputs,
         max_new_tokens=max_new_tokens,
         do_sample=False,
-        temperature=0.0,
+        min_new_tokens=16,
+        pad_token_id=tok.eos_token_id,
     )
     # `generate` returns prompt+completion; only decode newly generated tokens.
     return tok.decode(out[0][input_len:], skip_special_tokens=True)
@@ -129,18 +144,18 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
     dtype = torch.float16 if device in ("cuda", "mps") else torch.float32
 
     tok = AutoTokenizer.from_pretrained(model_id)
-    prompt = _format_chat_prompt(tok, prompt)
-
     model = Gemma3ForConditionalGeneration.from_pretrained(model_id, torch_dtype=dtype)
     model.to(device)
 
-    inputs = tok(prompt, return_tensors="pt").to(device)
+    inputs = _tokenize_chat(tok, prompt)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     input_len = inputs["input_ids"].shape[-1]
     out = model.generate(
         **inputs,
         max_new_tokens=max_new_tokens,
         do_sample=False,
-        temperature=0.0,
+        min_new_tokens=16,
+        pad_token_id=tok.eos_token_id,
     )
     return tok.decode(out[0][input_len:], skip_special_tokens=True)
 
@@ -179,7 +194,7 @@ def main() -> int:
     if not isinstance(parsed, dict):
         sys.stderr.write("Model output did not contain a JSON object.\n")
         if args.debug:
-            sys.stderr.write(raw[:2000] + "\n")
+            sys.stderr.write(f"len(raw)={len(raw)} repr(head)={raw[:400]!r}\n")
         return 1
 
     parsed.setdefault("schema_version", "0.0.0")
