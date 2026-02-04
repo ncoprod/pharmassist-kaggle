@@ -26,6 +26,7 @@ def extract_intake(ocr_text: str, language: Literal["fr", "en"]) -> dict[str, An
     if isinstance(model_out, dict) and isinstance(model_out.get("_raw"), str):
         parsed = _parse_first_json_object(model_out["_raw"])
         if isinstance(parsed, dict):
+            parsed = _canonicalize_intake_extracted(parsed, language)
             parsed.setdefault("schema_version", SCHEMA_VERSION)
             if not validate_or_return_errors(parsed, "intake_extracted"):
                 # Defense-in-depth: ensure the model didn't echo identifiers.
@@ -72,6 +73,18 @@ def _extract_intake_fallback(ocr_text: str, language: Literal["fr", "en"]) -> di
         if s:
             symptoms.append(s)
 
+    # If we successfully parsed symptoms, prefer them for coarse flags too.
+    labels_compact = _normalize(
+        " ".join([str(s.get("label") or "") for s in symptoms if isinstance(s, dict)])
+    ).replace(" ", "")
+    if labels_compact:
+        has_sneezing = has_sneezing or ("sneez" in labels_compact) or ("eternu" in labels_compact)
+        has_itchy_eyes = has_itchy_eyes or ("itchyeyes" in labels_compact)
+        has_dry_skin = has_dry_skin or ("dryskin" in labels_compact) or (
+            "peausech" in labels_compact
+        )
+        has_bloating = has_bloating or ("bloat" in labels_compact) or ("ballonn" in labels_compact)
+
     # If OCR noise broke the structured lines, build symptoms from coarse flags.
     if not symptoms:
         if has_sneezing:
@@ -109,6 +122,52 @@ def _extract_intake_fallback(ocr_text: str, language: Literal["fr", "en"]) -> di
             "symptoms": [{"label": "unspecified symptom", "severity": "unknown"}],
             "red_flags": [],
         }
+    return out
+
+
+def _canonicalize_intake_extracted(
+    payload: dict[str, Any], language: Literal["fr", "en"]
+) -> dict[str, Any]:
+    """Best-effort cleanup of model outputs (spacing/leetspeak) for downstream rules."""
+    out = dict(payload)
+
+    # Canonicalize symptom labels (e.g. "snee zing" -> "sneezing") when possible.
+    cleaned_symptoms: list[dict[str, Any]] = []
+    for s in out.get("symptoms") or []:
+        if not isinstance(s, dict):
+            continue
+        item = dict(s)
+        label = item.get("label")
+        if isinstance(label, str) and label.strip():
+            compact = _normalize(label).replace(" ", "")
+            canonical = _canonical_label(_deleet(compact)) or _canonical_label(compact)
+            if canonical:
+                item["label"] = canonical
+            else:
+                item["label"] = re.sub(r"\s+", " ", label).strip()
+        cleaned_symptoms.append(item)
+    if cleaned_symptoms:
+        out["symptoms"] = cleaned_symptoms
+
+    # If the presenting_problem is empty/unspecified, infer it from the (cleaned) symptom labels.
+    pp = out.get("presenting_problem")
+    pp_norm = _normalize(pp) if isinstance(pp, str) else ""
+    if not pp_norm or "unspecified" in pp_norm or "non specifie" in pp_norm:
+        labels_compact = _normalize(
+            " ".join([str(s.get("label") or "") for s in cleaned_symptoms])
+        ).replace(" ", "")
+        has_sneezing = ("sneez" in labels_compact) or ("eternu" in labels_compact)
+        has_itchy_eyes = "itchyeyes" in labels_compact
+        has_dry_skin = ("dryskin" in labels_compact) or ("peausech" in labels_compact)
+        has_bloating = ("bloat" in labels_compact) or ("ballonn" in labels_compact)
+        out["presenting_problem"] = _infer_presenting_problem(
+            has_sneezing=has_sneezing,
+            has_itchy_eyes=has_itchy_eyes,
+            has_dry_skin=has_dry_skin,
+            has_bloating=has_bloating,
+            language=language,
+        )
+
     return out
 
 
