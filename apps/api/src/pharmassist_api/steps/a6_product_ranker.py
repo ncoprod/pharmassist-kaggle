@@ -140,6 +140,12 @@ def _answers_to_map(follow_up_answers: list[dict[str, Any]] | None) -> dict[str,
 
 
 def _pregnancy_status(llm_context: dict[str, Any], answers: dict[str, str]) -> str:
+    demo = llm_context.get("demographics") if isinstance(llm_context, dict) else None
+    sex = demo.get("sex") if isinstance(demo, dict) else None
+    if isinstance(sex, str) and sex.strip().upper().startswith("M"):
+        # Pregnancy is not applicable for male patients; avoid irrelevant warnings.
+        return "not_applicable"
+
     # Start from llm_context if present (future), otherwise use follow-up answer.
     preg = llm_context.get("pregnancy_status") if isinstance(llm_context, dict) else None
     if isinstance(preg, str) and preg:

@@ -34,3 +34,20 @@ def test_ranker_returns_schema_valid_ranked_products_for_allergy_case():
     }
     validate_instance(reco, "recommendation")
 
+
+def test_ranker_does_not_emit_pregnancy_warnings_for_male_patient():
+    bundle = load_case_bundle("case_000044")
+
+    intake_extracted = bundle["intake_extracted"]
+    llm_context = bundle["llm_context"]
+    products = bundle["products"]
+
+    ranked, warnings = rank_products(
+        intake_extracted=intake_extracted,
+        llm_context=llm_context,
+        follow_up_answers=None,
+        products=products,
+    )
+
+    assert ranked and len(ranked) <= 3
+    assert not any(w.get("code") == "PREGNANCY_STATUS_UNKNOWN" for w in warnings)
