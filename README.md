@@ -8,6 +8,8 @@ What this repo demonstrates:
 - **Agentic workflow**: a step-by-step orchestrator with an audit trace + SSE progress in the UI.
 - **HAI-DEF usage**: optional model-backed intake extraction with **MedGemma**, with a deterministic fallback
   so CI stays fast and reproducible.
+- **Safe LLM routing**: optional MedGemma follow-up selection that can only choose from a closed
+  `question_id` allowlist (no free-form question generation).
 - **No real patient data**: synthetic cases only.
 
 Repo layout:
@@ -141,7 +143,30 @@ else:
 ```
 
 ```python
-# 6) Run the full pipeline (A1 uses MedGemma; A7 report can also use MedGemma)
+# 6) (Optional) Follow-up selector smoke (MedGemma selects allowlisted question_ids)
+#
+# This run is expected to stop in `needs_more_info` and show follow-up questions.
+import os, sys
+sys.path.insert(0, "apps/api/src")
+
+os.environ["PHARMASSIST_DB_PATH"] = "/kaggle/working/pharmassist_demo.db"
+os.environ["PHARMASSIST_USE_MEDGEMMA"] = "1"
+os.environ["PHARMASSIST_MEDGEMMA_MODEL"] = "google/medgemma-4b-it"
+os.environ["PHARMASSIST_USE_MEDGEMMA_FOLLOWUP"] = "1"
+
+from pharmassist_api import db, orchestrator
+
+db.init_db()
+run = orchestrator.new_run(case_ref="case_000042", language="en", trigger="manual")
+await orchestrator.run_pipeline(run["run_id"])
+r = db.get_run(run["run_id"])
+
+print("status:", r["status"])
+print("follow_up_question_ids:", [q["question_id"] for q in r["artifacts"]["recommendation"]["follow_up_questions"]])
+```
+
+```python
+# 7) Run the full pipeline (A1 uses MedGemma; A7 report can also use MedGemma)
 #
 # IMPORTANT: do NOT use asyncio.run(...) inside notebooks (an event loop is already running).
 # Use top-level `await` instead.
@@ -152,6 +177,7 @@ os.environ["PHARMASSIST_DB_PATH"] = "/kaggle/working/pharmassist_demo.db"
 os.environ["PHARMASSIST_USE_MEDGEMMA"] = "1"
 os.environ["PHARMASSIST_MEDGEMMA_MODEL"] = "google/medgemma-4b-it"
 os.environ["PHARMASSIST_USE_MEDGEMMA_REPORT"] = "1"  # optional
+os.environ["PHARMASSIST_USE_MEDGEMMA_FOLLOWUP"] = "0"  # keep off for this fully-automated demo
 
 from pharmassist_api import db, orchestrator
 
