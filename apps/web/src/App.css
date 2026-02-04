@@ -362,6 +362,51 @@ textarea {
   color: #0f172a;
 }
 
+.auditDetails {
+  margin-top: 12px;
+  border: 1px dashed #cfe2d8;
+  border-radius: 12px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.auditSummary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.auditList {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.auditEvent {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.auditTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.auditMsg {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
 .artifact {
   margin-top: 10px;
 }

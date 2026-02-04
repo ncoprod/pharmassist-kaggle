@@ -68,19 +68,15 @@ def _build_user_content(ocr_text: str, language: Literal["fr", "en"]) -> str:
     )
 
 
-def _format_chat_prompt(tok: Any, user_content: str) -> str:
-    # Prefer model chat template when available (MedGemma IT models).
-    system = (
-        "You are a medical information extraction system. "
-        "Output MUST be a single JSON object and nothing else."
-    )
+def _format_chat_prompt(tok: Any, *, system: str, user: str) -> str:
+    """Format a system+user prompt with the model's chat template when available."""
     if hasattr(tok, "apply_chat_template"):
         messages = [
             {"role": "system", "content": system},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": user},
         ]
         return tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    return system + "\n\n" + user_content
+    return system + "\n\n" + user
 
 
 def _infer_loader_mode(architectures: list[str]) -> Literal["causal", "conditional"]:
@@ -188,7 +184,14 @@ def medgemma_extract_json(
                 out = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
             text = proc.decode(out[0][input_len:], skip_special_tokens=True)  # type: ignore[attr-defined]
         else:
-            prompt = _format_chat_prompt(proc, user_content)  # type: ignore[arg-type]
+            prompt = _format_chat_prompt(  # type: ignore[arg-type]
+                proc,
+                system=(
+                    "You are a medical information extraction system. "
+                    "Output MUST be a single JSON object and nothing else."
+                ),
+                user=user_content,
+            )
             inputs = proc(prompt, return_tensors="pt")  # type: ignore[operator]
             try:
                 inputs = inputs.to(device)
@@ -242,7 +245,7 @@ def medgemma_generate_text(
                 out = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
             return proc.decode(out[0][input_len:], skip_special_tokens=True)  # type: ignore[attr-defined]
 
-        prompt = _format_chat_prompt(proc, system + "\n\n" + user_content)  # type: ignore[arg-type]
+        prompt = _format_chat_prompt(proc, system=system, user=user_content)  # type: ignore[arg-type]
         inputs = proc(prompt, return_tensors="pt")  # type: ignore[operator]
         try:
             inputs = inputs.to(device)

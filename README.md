@@ -151,6 +151,12 @@ export PHARMASSIST_MEDGEMMA_MODEL=google/medgemma-4b-it
 make api-dev
 ```
 
+To also enable **model-backed report composition** (Day 8), add:
+
+```bash
+export PHARMASSIST_USE_MEDGEMMA_REPORT=1
+```
+
 ## License
 
 This repository is open source (see `LICENSE`).

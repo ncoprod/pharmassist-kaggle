@@ -64,6 +64,13 @@ def compose_handout_markdown(
 
     # Safety net: if lint detects Rx advice, fall back to minimal safe content.
     if any(v.severity == "BLOCKER" for v in lint_rx_advice(md, path="$.handout_markdown")):
+        if language == "fr":
+            return (
+                "# Fiche patient\n\n"
+                "- Suivez les conseils du pharmacien.\n"
+                "- Si aggravation, consultez un medecin.\n"
+                "- Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n"
+            )
         return (
             "# Patient handout\n\n"
             "- Follow your pharmacist instructions.\n"

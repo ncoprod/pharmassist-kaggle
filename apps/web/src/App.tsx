@@ -39,6 +39,31 @@ type EvidenceItem = {
   summary: string
 }
 
+type TraceViolation = {
+  code: string
+  severity: 'BLOCKER' | 'WARN'
+  json_path: string
+  message: string
+}
+
+type TraceEvent = {
+  type: string
+  ts?: string
+  step?: string
+  message?: string
+  tool_name?: string
+  result_summary?: string
+  rule_id?: string
+  severity?: string
+  violation?: TraceViolation
+}
+
+type Trace = {
+  trace_id: string
+  run_id: string
+  events: TraceEvent[]
+}
+
 type Recommendation = {
   follow_up_questions: FollowUpQuestion[]
   ranked_products?: RankedProduct[]
@@ -66,6 +91,7 @@ type Run = {
     handout_markdown?: string
     recommendation?: Recommendation
     evidence_items?: EvidenceItem[]
+    trace?: Trace
   }
   policy_violations?: unknown[]
 }
@@ -102,6 +128,7 @@ function App() {
   const safetyWarnings = run?.artifacts?.recommendation?.safety_warnings ?? []
   const escalation = run?.artifacts?.recommendation?.escalation
   const evidenceItems = run?.artifacts?.evidence_items ?? []
+  const trace = run?.artifacts?.trace
 
   const missingFollowUpCount = useMemo(() => {
     return followUpQuestions.filter((q) => {
@@ -497,6 +524,48 @@ function App() {
                     ))}
                   </div>
                 )}
+
+                {trace?.events?.length ? (
+                  <details className="auditDetails">
+                    <summary className="auditSummary">
+                      {runLanguage === 'fr'
+                        ? 'Audit (trace redactee)'
+                        : 'Audit (redacted trace)'}
+                      <span className="muted small mono">
+                        {' '}
+                        {trace.events.length} events
+                      </span>
+                    </summary>
+                    <div className="auditList">
+                      {trace.events.map((e, idx) => (
+                        <div key={`${e.type}-${idx}`} className="auditEvent">
+                          <div className="auditTop">
+                            <span className="badge">{e.type}</span>
+                            <span className="muted small mono">
+                              {e.step ? `${e.step} · ` : ''}
+                              {e.ts ?? ''}
+                            </span>
+                          </div>
+                          {e.rule_id ? (
+                            <div className="muted small mono">rule: {e.rule_id}</div>
+                          ) : null}
+                          {e.tool_name ? (
+                            <div className="muted small mono">tool: {e.tool_name}</div>
+                          ) : null}
+                          {e.result_summary ? (
+                            <div className="muted small">{e.result_summary}</div>
+                          ) : null}
+                          {e.violation ? (
+                            <div className="muted small">
+                              {e.violation.severity}: {e.violation.code} @ {e.violation.json_path}
+                            </div>
+                          ) : null}
+                          {e.message ? <div className="auditMsg">{e.message}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </>
             )}
           </section>

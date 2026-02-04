@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from pharmassist_api import db
 from pharmassist_api.contracts.validate_schema import validate_instance
 from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run_with_answers, run_pipeline
+from pharmassist_api.privacy.phi_boundary import scan_text
 from pharmassist_api.validators.phi_scanner import scan_for_phi
 
 
@@ -66,6 +67,13 @@ async def create_run(req: RunCreateRequest) -> dict[str, Any]:
     )
     if follow_up_answers:
         violations = scan_for_phi(follow_up_answers, path="$.follow_up_answers")
+        # Defense in depth: treat "label-like" PHI (e.g. "Nom: ...") as BLOCKER too.
+        for idx, item in enumerate(follow_up_answers):
+            if not isinstance(item, dict):
+                continue
+            ans = item.get("answer")
+            if isinstance(ans, str) and ans.strip():
+                violations.extend(scan_text(ans, json_path=f"$.follow_up_answers[{idx}].answer"))
         blockers = [v for v in violations if v.severity == "BLOCKER"]
         if blockers:
             # Do not persist identifier-like content from untrusted UI input.
