@@ -302,6 +302,40 @@ textarea {
   color: #0f172a;
 }
 
+.evidenceList {
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.evidenceItem {
+  display: block;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.evidenceItem:hover {
+  border-color: #a7f3d0;
+  background: #f8fffb;
+}
+
+.evidenceTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.evidenceTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
 .artifact {
   margin-top: 10px;
 }

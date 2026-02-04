@@ -1,0 +1,183 @@
+[
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_allergy_001",
+    "title": "Hay fever (allergic rhinitis) — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/hay-fever/",
+    "summary": "Overview of allergic rhinitis symptoms, common triggers, self-care measures, and when to seek medical advice.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_allergy_002",
+    "title": "Allergic rhinitis",
+    "publisher": "MedlinePlus (NIH/NLM)",
+    "url": "https://medlineplus.gov/ency/article/000813.htm",
+    "summary": "Patient-focused description of allergic rhinitis symptoms, diagnosis, and general management options.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_allergy_003",
+    "title": "Allergies — basics",
+    "publisher": "CDC",
+    "url": "https://www.cdc.gov/allergies/",
+    "summary": "General information on allergies, risk factors, and when to seek medical help for severe symptoms.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_derm_001",
+    "title": "Atopic eczema — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/atopic-eczema/",
+    "summary": "Overview of atopic eczema symptoms and typical care patterns, including moisturizers/emollients and when to consult a clinician.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_derm_002",
+    "title": "Dry skin — self-care",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/dry-skin/",
+    "summary": "Practical self-care advice for dry skin and indications for medical evaluation if symptoms persist or worsen.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_digest_001",
+    "title": "Indigestion — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/indigestion/",
+    "summary": "Symptoms of indigestion, common triggers (meals, stress), and guidance on when to seek medical care.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_digest_002",
+    "title": "Gas in the digestive tract",
+    "publisher": "MedlinePlus (NIH/NLM)",
+    "url": "https://medlineplus.gov/ency/article/003134.htm",
+    "summary": "Patient information about intestinal gas/bloating, common causes, and red flags requiring medical evaluation.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_digest_003",
+    "title": "Diarrhoea and vomiting — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/diarrhoea-and-vomiting/",
+    "summary": "Overview of diarrhoea/vomiting, hydration advice, and when to seek urgent medical care.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_redflag_001",
+    "title": "Chest pain — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/chest-pain/",
+    "summary": "Guidance on chest pain, emphasizing when to seek emergency care and symptoms that require urgent assessment.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_redflag_002",
+    "title": "Shortness of breath — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/shortness-of-breath/",
+    "summary": "Guidance on breathlessness, including severe symptoms and situations that require emergency evaluation.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_fever_001",
+    "title": "Fever in adults — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/fever-in-adults/",
+    "summary": "Overview of fever in adults and situations where clinical evaluation is recommended (severity, persistence, associated symptoms).",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_preg_001",
+    "title": "Medicines in pregnancy — guidance",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/pregnancy/keeping-well/medicines-in-pregnancy/",
+    "summary": "General guidance on medicine use in pregnancy and the importance of confirming pregnancy status and seeking professional advice.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_selfcare_001",
+    "title": "Self-care interventions for health",
+    "publisher": "WHO",
+    "url": "https://www.who.int/health-topics/self-care",
+    "summary": "High-level overview of self-care as part of health systems, emphasizing safe, evidence-informed actions and appropriate escalation.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_allergy_004",
+    "title": "Allergy symptoms — when to seek help",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/allergies/",
+    "summary": "General allergy information, including signs of severe reactions and when to seek urgent medical help.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_digest_004",
+    "title": "Abdominal pain — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/stomach-ache/",
+    "summary": "General guidance on stomach pain, including common benign causes and red flags requiring medical evaluation.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_derm_003",
+    "title": "Itchy skin — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/itchy-skin/",
+    "summary": "Overview of itchy skin causes and safe self-care steps; highlights when clinician review is appropriate.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_redflag_003",
+    "title": "Anaphylaxis — emergency guidance",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/anaphylaxis/",
+    "summary": "Emergency guidance on anaphylaxis symptoms and immediate actions (seek emergency care).",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  },
+  {
+    "schema_version": "0.0.0",
+    "evidence_id": "ev_digest_005",
+    "title": "Constipation — overview",
+    "publisher": "NHS",
+    "url": "https://www.nhs.uk/conditions/constipation/",
+    "summary": "Overview of constipation symptoms, typical self-care measures, and warning signs requiring clinician review.",
+    "retrieved_at": "2026-02-04T00:00:00Z",
+    "level_of_evidence": "educational"
+  }
+]
+

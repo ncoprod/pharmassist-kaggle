@@ -31,6 +31,14 @@ type Escalation = {
   suggested_service: string
 }
 
+type EvidenceItem = {
+  evidence_id: string
+  title: string
+  publisher: string
+  url: string
+  summary: string
+}
+
 type Recommendation = {
   follow_up_questions: FollowUpQuestion[]
   ranked_products?: RankedProduct[]
@@ -57,6 +65,7 @@ type Run = {
     report_markdown?: string
     handout_markdown?: string
     recommendation?: Recommendation
+    evidence_items?: EvidenceItem[]
   }
   policy_violations?: unknown[]
 }
@@ -92,6 +101,7 @@ function App() {
   const rankedProducts = run?.artifacts?.recommendation?.ranked_products ?? []
   const safetyWarnings = run?.artifacts?.recommendation?.safety_warnings ?? []
   const escalation = run?.artifacts?.recommendation?.escalation
+  const evidenceItems = run?.artifacts?.evidence_items ?? []
 
   const missingFollowUpCount = useMemo(() => {
     return followUpQuestions.filter((q) => {
@@ -459,6 +469,31 @@ function App() {
                         </div>
                         <div className="productWhy">{p.why}</div>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="subTitle">
+                  {runLanguage === 'fr' ? 'Sources (offline corpus)' : 'Sources (offline corpus)'}
+                </div>
+                {evidenceItems.length === 0 ? (
+                  <div className="muted small">—</div>
+                ) : (
+                  <div className="evidenceList">
+                    {evidenceItems.map((ev) => (
+                      <a
+                        key={ev.evidence_id}
+                        className="evidenceItem"
+                        href={ev.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <div className="evidenceTop">
+                          <span className="evidenceTitle">{ev.title}</span>
+                          <span className="mono small">{ev.evidence_id}</span>
+                        </div>
+                        <div className="muted small">{ev.publisher}</div>
+                      </a>
                     ))}
                   </div>
                 )}
