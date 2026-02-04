@@ -7,7 +7,7 @@
       "tags": ["general", "timeline"],
       "question": {
         "fr": "Depuis combien de jours ?",
-        "en": "How many days?"
+        "en": "How many days have you had these symptoms?"
       },
       "reason": {
         "fr": "La duree aide a differencier une situation benigne d'un probleme a evaluer.",
@@ -95,4 +95,3 @@
     }
   }
 }
-
