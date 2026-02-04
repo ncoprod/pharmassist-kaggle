@@ -5,6 +5,17 @@ from functools import lru_cache
 from typing import Any, Literal
 
 
+def _from_pretrained_with_dtype(loader: Any, model_id: str, *, dtype: Any, **kwargs: Any) -> Any:
+    """Compatibility helper for Transformers versions.
+
+    Newer versions prefer `dtype=...`, older ones accept `torch_dtype=...`.
+    """
+    try:
+        return loader.from_pretrained(model_id, dtype=dtype, **kwargs)
+    except TypeError:
+        return loader.from_pretrained(model_id, torch_dtype=dtype, **kwargs)
+
+
 def _enabled() -> bool:
     return os.getenv("PHARMASSIST_USE_MEDGEMMA", "").strip() == "1"
 
@@ -107,16 +118,22 @@ def _load_model() -> tuple[Any, Any, Literal["causal", "conditional"], str]:
     if mode == "conditional":
         from transformers import AutoModelForImageTextToText, AutoProcessor  # type: ignore
 
-        model = AutoModelForImageTextToText.from_pretrained(
-            model_id,
-            torch_dtype=dtype,
-            device_map="auto" if device == "cuda" else None,
+        model_kwargs: dict[str, Any] = {}
+        if device == "cuda":
+            model_kwargs["device_map"] = "auto"
+
+        model = _from_pretrained_with_dtype(
+            AutoModelForImageTextToText, model_id, dtype=dtype, **model_kwargs
         )
-        proc = AutoProcessor.from_pretrained(model_id)
+        try:
+            # Pin to the slow processor for stability (Transformers will change defaults).
+            proc = AutoProcessor.from_pretrained(model_id, use_fast=False)
+        except TypeError:
+            proc = AutoProcessor.from_pretrained(model_id)
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
-        model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype)
+        model = _from_pretrained_with_dtype(AutoModelForCausalLM, model_id, dtype=dtype)
         proc = AutoTokenizer.from_pretrained(model_id)
 
     try:

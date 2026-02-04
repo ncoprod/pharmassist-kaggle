@@ -153,12 +153,23 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int, debug: 
     else:
         dtype = torch.float32
 
-    model = AutoModelForImageTextToText.from_pretrained(
-        model_id,
-        torch_dtype=dtype,
-        device_map="auto" if device == "cuda" else None,
-    )
-    processor = AutoProcessor.from_pretrained(model_id)
+    model_kwargs: dict[str, Any] = {}
+    if device == "cuda":
+        model_kwargs["device_map"] = "auto"
+
+    # Newer Transformers prefer `dtype=...`, older ones accept `torch_dtype=...`.
+    try:
+        model = AutoModelForImageTextToText.from_pretrained(model_id, dtype=dtype, **model_kwargs)
+    except TypeError:
+        model = AutoModelForImageTextToText.from_pretrained(
+            model_id, torch_dtype=dtype, **model_kwargs
+        )
+
+    try:
+        # Pin to the slow processor for stability (Transformers will change defaults).
+        processor = AutoProcessor.from_pretrained(model_id, use_fast=False)
+    except TypeError:
+        processor = AutoProcessor.from_pretrained(model_id)
 
     system = (
         "You are a medical information extraction system. "
@@ -232,7 +243,10 @@ def main() -> int:
             )
     except ImportError as e:
         sys.stderr.write(
-            "Missing ML deps. Install with: .venv/bin/pip install -e \"apps/api[ml]\"\n"
+            "Missing ML deps. In a local venv you can run:\n"
+            "  .venv/bin/pip install -e \"apps/api[ml]\"\n"
+            "In a Kaggle notebook, prefer minimal installs (avoid editable installs):\n"
+            "  pip install -q transformers accelerate safetensors\n"
         )
         sys.stderr.write(f"ImportError: {e}\n")
         return 2
