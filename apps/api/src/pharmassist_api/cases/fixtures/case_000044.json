@@ -68,17 +68,90 @@
     },
     {
       "brand": "ExampleBrand",
-      "category": "derm",
+      "category": "dermatology",
       "contraindication_tags": [],
       "in_stock": true,
       "ingredients": [
-        "glycerin"
+        "glycerin",
+        "urea"
       ],
       "name": "Moisturizing cream (example)",
       "price_eur": 7.9,
       "schema_version": "0.0.0",
       "sku": "SKU-0003",
       "stock_qty": 5
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "dermatology",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "emollient"
+      ],
+      "name": "Emollient balm (example)",
+      "price_eur": 9.9,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0004",
+      "stock_qty": 6
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "digestion",
+      "contraindication_tags": [
+        "pregnancy_unknown"
+      ],
+      "in_stock": true,
+      "ingredients": [
+        "simethicone"
+      ],
+      "name": "Simethicone 80mg (example)",
+      "price_eur": 5.5,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0005",
+      "stock_qty": 10
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "digestion",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "probiotic"
+      ],
+      "name": "Probiotic capsules (example)",
+      "price_eur": 12.9,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0006",
+      "stock_qty": 4
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "digestion",
+      "contraindication_tags": [],
+      "in_stock": false,
+      "ingredients": [
+        "oral_rehydration_salts"
+      ],
+      "name": "Oral rehydration salts (example)",
+      "price_eur": 6.2,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0007",
+      "stock_qty": 0
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "general",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "vitamin_d3"
+      ],
+      "name": "Vitamin D3 (example)",
+      "price_eur": 8.8,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0008",
+      "stock_qty": 9
     }
   ],
   "schema_version": "0.0.0",

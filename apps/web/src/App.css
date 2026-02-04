@@ -93,6 +93,13 @@ textarea {
   color: #0f172a;
 }
 
+.subTitle {
+  margin-top: 10px;
+  font-weight: 700;
+  font-size: 12px;
+  color: #334155;
+}
+
 .muted {
   color: #64748b;
   font-size: 13px;
@@ -217,6 +224,82 @@ textarea {
   align-items: center;
   gap: 10px;
   margin-top: 12px;
+}
+
+.warningList {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.warning {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.sev {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid transparent;
+}
+
+.sevWarn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.sevBlocker {
+  background: #fff1f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.warningMsg {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.productList {
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.productCard {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.productTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.score {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 12px;
+}
+
+.productWhy {
+  font-size: 13px;
+  color: #0f172a;
 }
 
 .artifact {

@@ -13,6 +13,8 @@ from .contracts.validate_schema import validate_instance
 from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi
 from .steps.a1_intake_extraction import extract_intake
 from .steps.a3_triage import triage_and_followup
+from .steps.a5_safety import compute_safety_warnings
+from .steps.a6_product_ranker import rank_products
 
 SCHEMA_VERSION = "0.0.0"
 
@@ -21,9 +23,9 @@ PIPELINE_STEPS = [
     "A2_phi_scrubber",
     "A1_intake_extraction",
     "A3_triage",
+    "A6_product_ranker",
     "A5_safety",
     "A4_evidence_retrieval",
-    "A6_product_ranker",
     "A7_report_composer",
     "A8_handout",
     "A9_trace",
@@ -264,6 +266,102 @@ async def run_pipeline(run_id: str) -> None:
                 _RUN_QUEUES.pop(run_id, None)
                 return
 
+            # If triage recommends escalation, stop early and do not recommend products.
+            if (
+                isinstance(recommendation, dict)
+                and isinstance(recommendation.get("escalation"), dict)
+                and recommendation["escalation"].get("recommended") is True
+            ):
+                esc = recommendation["escalation"]
+                report_md = (
+                    "# Pharmacist report (synthetic)\n\n"
+                    "- Scope: OTC/parapharmacy decision support only.\n"
+                    f"- Escalation: {esc.get('suggested_service')}.\n"
+                    f"- Reason: {esc.get('reason')}.\n"
+                )
+                handout_md = (
+                    "# Patient handout (synthetic)\n\n"
+                    "- Suivez les consignes du pharmacien.\n"
+                    f"- {esc.get('reason')}\n"
+                )
+                artifacts["report_markdown"] = report_md
+                artifacts["handout_markdown"] = handout_md
+
+                db.update_run(
+                    run_id,
+                    status="completed",
+                    artifacts=artifacts,
+                    policy_violations=[],
+                )
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run completed (escalation recommended).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+        elif step == "A6_product_ranker":
+            if not isinstance(intake_extracted, dict) or not isinstance(recommendation, dict):
+                db.update_run(run_id, status="failed_safe", policy_violations=[])
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run failed_safe (missing A3 artifacts).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+            ranked_products, ranker_warnings = rank_products(
+                intake_extracted=intake_extracted,
+                llm_context=bundle.get("llm_context") or {},
+                follow_up_answers=(
+                    follow_up_answers if isinstance(follow_up_answers, list) else None
+                ),
+                products=bundle.get("products") or [],
+            )
+            recommendation = dict(recommendation)
+            recommendation["ranked_products"] = ranked_products
+            recommendation["safety_warnings"] = _dedupe_warnings(
+                list(recommendation.get("safety_warnings") or []) + list(ranker_warnings or [])
+            )
+            artifacts["recommendation"] = recommendation
+            await asyncio.sleep(0.1)
+
+        elif step == "A5_safety":
+            if not isinstance(recommendation, dict):
+                db.update_run(run_id, status="failed_safe", policy_violations=[])
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run failed_safe (missing recommendation).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+            products_by_sku = {
+                str(p.get("sku")): p
+                for p in (bundle.get("products") or [])
+                if isinstance(p, dict) and isinstance(p.get("sku"), str) and p.get("sku")
+            }
+            safety = compute_safety_warnings(
+                llm_context=bundle.get("llm_context") or {},
+                follow_up_answers=(
+                    follow_up_answers if isinstance(follow_up_answers, list) else None
+                ),
+                products_by_sku=products_by_sku,
+                ranked_products=list(recommendation.get("ranked_products") or []),
+                escalation=recommendation.get("escalation")
+                if isinstance(recommendation.get("escalation"), dict)
+                else None,
+            )
+            recommendation = dict(recommendation)
+            recommendation["safety_warnings"] = _dedupe_warnings(
+                list(recommendation.get("safety_warnings") or []) + list(safety or [])
+            )
+            artifacts["recommendation"] = recommendation
+            await asyncio.sleep(0.1)
+
         else:
             # Simulate work; keeps the UI feeling alive without heavy computation.
             await asyncio.sleep(0.25)
@@ -322,3 +420,20 @@ def dumps_sse(
         lines.append(f"event: {event}")
     lines.append(f"data: {json.dumps(data, ensure_ascii=False)}")
     return "\n".join(lines) + "\n\n"
+
+
+def _dedupe_warnings(warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str | None]] = set()
+    for w in warnings:
+        if not isinstance(w, dict):
+            continue
+        code = str(w.get("code") or "")
+        sku = w.get("related_product_sku")
+        sku_key = sku if isinstance(sku, str) else None
+        key = (code, sku_key)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(w)
+    return out
