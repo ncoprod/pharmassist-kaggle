@@ -9,7 +9,7 @@ def test_orchestrator_sets_needs_more_info_when_follow_up_required(tmp_path, mon
 
     db.init_db()
 
-    run = orchestrator.new_run(case_ref="case_000042", language="en", trigger="manual")
+    run = orchestrator.new_run(case_ref="case_lowinfo_000102", language="en", trigger="manual")
     asyncio.run(orchestrator.run_pipeline(run["run_id"]))
 
     stored = db.get_run(run["run_id"])
@@ -17,4 +17,3 @@ def test_orchestrator_sets_needs_more_info_when_follow_up_required(tmp_path, mon
     assert stored["status"] == "needs_more_info"
     assert "recommendation" in stored["artifacts"]
     assert "intake_extracted" in stored["artifacts"]
-

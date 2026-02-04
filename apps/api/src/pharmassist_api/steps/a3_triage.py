@@ -54,19 +54,19 @@ def triage_and_followup(
 
     # If there is any red flag, we escalate immediately and avoid asking more questions.
     if not red_flags:
-        follow_up_questions, selector_meta = _generate_follow_up_questions(
+        follow_up_questions, needs_more_info, selector_meta = _generate_follow_up_questions(
             intake_extracted=intake_extracted,
             llm_context=llm_context,
             answers=answers,
             language=language,
         )
-
-    needs_more_info = bool(follow_up_questions)
+    else:
+        needs_more_info = False
 
     confidence = 0.2
     if _is_low_info(intake_extracted):
         confidence = 0.1
-    elif not red_flags and not follow_up_questions:
+    elif not red_flags and not needs_more_info:
         confidence = 0.5
 
     recommendation: dict[str, Any] = {
@@ -138,7 +138,7 @@ def _generate_follow_up_questions(
     llm_context: dict[str, Any],
     answers: dict[str, str],
     language: Language,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], bool, dict[str, Any]]:
     required_ids: set[str] = set()
     optional_ids: set[str] = set()
     bank = load_question_bank()
@@ -159,9 +159,8 @@ def _generate_follow_up_questions(
             or ("itchy" in compact and "eye" in compact)
             or ("eternu" in compact)
         ):
-            required_ids |= {"q_fever", "q_breathing"}
-            # Optional: helps refine advice without forcing extra questions in rules-only mode.
-            optional_ids |= {"q_allergy_severity"}
+            # Follow-up is optional here: the default path should proceed.
+            optional_ids |= {"q_fever", "q_breathing", "q_allergy_severity"}
 
     # Ask duration if we don't have duration_days anywhere.
     has_duration = any(
@@ -170,13 +169,6 @@ def _generate_follow_up_questions(
     )
     if not has_duration:
         required_ids.add("q_duration")
-
-    # Pregnancy question if unknown and sex is F.
-    demo = llm_context.get("demographics") if isinstance(llm_context, dict) else None
-    sex = demo.get("sex") if isinstance(demo, dict) else None
-    preg = llm_context.get("pregnancy_status") if isinstance(llm_context, dict) else None
-    if sex == "F" and preg is None:
-        required_ids.add("q_pregnancy")
 
     # If fever is present, we need the max temperature to assess high fever (>= 39C).
     if _is_yes(answers.get("q_fever")) and "q_temperature" not in answers:
@@ -187,6 +179,7 @@ def _generate_follow_up_questions(
     optional_ids = {qid for qid in optional_ids if qid not in answers}
 
     max_k = 5
+    needs_more_info = bool(required_ids)
 
     # Candidate ids for the selector (closed allowlist). This may include optional candidates.
     candidate_ids = sorted(
@@ -254,7 +247,7 @@ def _generate_follow_up_questions(
         "candidate_ids": candidate_ids,
         "selected_ids": list(selected_ids or []),
     }
-    return items, selector_meta
+    return items, needs_more_info, selector_meta
 
 
 def _detect_red_flags(text_blob_norm: str, answers: dict[str, str]) -> set[str]:
