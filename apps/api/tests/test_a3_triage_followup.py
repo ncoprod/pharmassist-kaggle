@@ -52,6 +52,31 @@ def test_triage_escalates_on_red_flags():
     assert "RF_BREATHING_DIFFICULTY" in updated["red_flags"]
 
 
+def test_triage_escalates_on_noisy_dyspnea_label():
+    # OCR noise can introduce leetspeak digits (e.g. dy5pnea). We should still
+    # detect breathing difficulty and escalate.
+    intake = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "Symptomes non specifie(s)",
+        "symptoms": [{"label": "dy5pnea", "severity": "severe"}],
+        "red_flags": [],
+    }
+    llm_context = {"demographics": {"age_years": 62, "sex": "M"}, "schema_version": "0.0.0"}
+
+    updated, reco, needs_more_info, _meta = triage_and_followup(
+        intake_extracted=intake,
+        llm_context=llm_context,
+        follow_up_answers=None,
+        language="fr",
+    )
+
+    validate_instance(updated, "intake_extracted")
+    validate_instance(reco, "recommendation")
+    assert needs_more_info is False
+    assert reco.get("escalation", {}).get("recommended") is True
+    assert "RF_BREATHING_DIFFICULTY" in updated["red_flags"]
+
+
 def test_triage_low_info_blocks_until_min_questions_answered():
     intake = {
         "schema_version": "0.0.0",

@@ -254,7 +254,21 @@ def _detect_red_flags(text_blob_norm: str, answers: dict[str, str]) -> set[str]:
     rf: set[str] = set()
 
     def has_any(*subs: str) -> bool:
-        return any(s in text_blob_norm for s in subs)
+        # OCR can introduce leetspeak digits (e.g. dy5pnea). We scan both the
+        # normalized blob and a "de-leeted" variant, with/without spaces.
+        blob = text_blob_norm
+        blob_deleet = _deleet(text_blob_norm)
+        blob_compact = blob.replace(" ", "")
+        blob_deleet_compact = blob_deleet.replace(" ", "")
+        for s in subs:
+            if (
+                s in blob
+                or s in blob_deleet
+                or s in blob_compact
+                or s in blob_deleet_compact
+            ):
+                return True
+        return False
 
     # From text (best-effort, since OCR may be noisy).
     if has_any(
@@ -262,6 +276,7 @@ def _detect_red_flags(text_blob_norm: str, answers: dict[str, str]) -> set[str]:
         "difficulty breathing",
         "breathing difficulty",
         "dyspnee",
+        "dyspnea",
         "dyspne",
         "gene respiratoire",
         "essouff",
@@ -370,3 +385,23 @@ def _norm(text: str) -> str:
     text = re.sub(r"[^a-z0-9\\s:/().,-]+", " ", text)
     text = re.sub(r"\\s+", " ", text).strip()
     return text
+
+
+def _deleet(text: str) -> str:
+    # Common OCR/leetspeak substitutions (helps match substrings like "dy5pnea" -> "dyspnea").
+    return text.translate(
+        str.maketrans(
+            {
+                "0": "o",
+                "1": "i",
+                "2": "z",
+                "3": "e",
+                "4": "a",
+                "5": "s",
+                "6": "g",
+                "7": "t",
+                "8": "b",
+                "9": "g",
+            }
+        )
+    )
