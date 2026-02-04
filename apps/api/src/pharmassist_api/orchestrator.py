@@ -13,6 +13,7 @@ from .contracts.validate_schema import validate_instance
 from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi
 from .steps.a1_intake_extraction import extract_intake
 from .steps.a3_triage import triage_and_followup
+from .steps.a4_evidence_retrieval import retrieve_evidence
 from .steps.a5_safety import compute_safety_warnings
 from .steps.a6_product_ranker import rank_products
 
@@ -360,6 +361,44 @@ async def run_pipeline(run_id: str) -> None:
                 list(recommendation.get("safety_warnings") or []) + list(safety or [])
             )
             artifacts["recommendation"] = recommendation
+            await asyncio.sleep(0.1)
+
+        elif step == "A4_evidence_retrieval":
+            if not isinstance(intake_extracted, dict):
+                db.update_run(run_id, status="failed_safe", policy_violations=[])
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run failed_safe (missing intake_extracted).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+            evidence_items = retrieve_evidence(
+                intake_extracted=intake_extracted,
+                llm_context=bundle.get("llm_context") or {},
+                k=5,
+            )
+            artifacts["evidence_items"] = evidence_items
+
+            # Attach safe evidence_refs to ranked products (ids only).
+            evidence_ids = [
+                str(e.get("evidence_id"))
+                for e in evidence_items
+                if isinstance(e, dict) and isinstance(e.get("evidence_id"), str)
+            ]
+            if isinstance(recommendation, dict):
+                rec = dict(recommendation)
+                ranked = []
+                for rp in rec.get("ranked_products") or []:
+                    if not isinstance(rp, dict):
+                        continue
+                    refs = evidence_ids[:2]
+                    ranked.append({**rp, "evidence_refs": refs})
+                rec["ranked_products"] = ranked
+                recommendation = rec
+                artifacts["recommendation"] = recommendation
+
             await asyncio.sleep(0.1)
 
         else:
