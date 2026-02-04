@@ -93,6 +93,32 @@ textarea {
   color: #0f172a;
 }
 
+.panelTitleRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.panelTitleRow .panelTitle {
+  margin-bottom: 0;
+}
+
+.printBtn {
+  border: 1px solid #cfe2d8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.printBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .subTitle {
   margin-top: 10px;
   font-weight: 700;
@@ -363,4 +389,34 @@ textarea {
   padding: 10px;
   background: #f8fffb;
   margin: 0;
+}
+
+@media print {
+  .header,
+  .error,
+  .events,
+  .controls,
+  .printBtn {
+    display: none !important;
+  }
+
+  .grid > section:not(.printPanel) {
+    display: none !important;
+  }
+
+  .app {
+    padding: 0;
+    max-width: none;
+  }
+
+  .printPanel {
+    border: none;
+    padding: 0;
+  }
+
+  .pre {
+    border: none;
+    padding: 0;
+    background: #ffffff;
+  }
 }
