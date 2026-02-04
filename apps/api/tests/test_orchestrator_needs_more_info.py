@@ -17,3 +17,9 @@ def test_orchestrator_sets_needs_more_info_when_follow_up_required(tmp_path, mon
     assert stored["status"] == "needs_more_info"
     assert "recommendation" in stored["artifacts"]
     assert "intake_extracted" in stored["artifacts"]
+    qids = {
+        q.get("question_id")
+        for q in (stored["artifacts"]["recommendation"].get("follow_up_questions") or [])
+        if isinstance(q, dict)
+    }
+    assert {"q_duration", "q_fever", "q_breathing"} <= qids

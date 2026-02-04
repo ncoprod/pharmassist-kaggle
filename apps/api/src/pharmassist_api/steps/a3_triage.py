@@ -127,7 +127,16 @@ def _is_low_info(intake_extracted: dict[str, Any]) -> bool:
         return True
     for s in syms:
         if isinstance(s, dict) and isinstance(s.get("label"), str):
-            if "unspecified" in s["label"].lower():
+            label_norm = _norm(s["label"])
+            # OCR can introduce spacing / leetspeak noise (e.g. "unspec  ified").
+            label_compact = label_norm.replace(" ", "")
+            label_deleet_compact = _deleet(label_norm).replace(" ", "")
+            if (
+                "unspecified" in label_compact
+                or "unspecified" in label_deleet_compact
+                or "nonspecifie" in label_compact
+                or "nonspecifie" in label_deleet_compact
+            ):
                 return True
     return False
 
