@@ -64,6 +64,7 @@ function App() {
     return run?.artifacts?.recommendation?.follow_up_questions ?? EMPTY_FOLLOW_UP_QUESTIONS
   }, [run?.artifacts?.recommendation?.follow_up_questions])
   const needsMoreInfo = run?.status === 'needs_more_info' && followUpQuestions.length > 0
+  const runLanguage = run?.input?.language ?? language
 
   const missingFollowUpCount = useMemo(() => {
     return followUpQuestions.filter((q) => {
@@ -97,8 +98,8 @@ function App() {
           data-testid={testId}
         >
           <option value="">—</option>
-          <option value="yes">{language === 'fr' ? 'Oui' : 'Yes'}</option>
-          <option value="no">{language === 'fr' ? 'Non' : 'No'}</option>
+          <option value="yes">{runLanguage === 'fr' ? 'Oui' : 'Yes'}</option>
+          <option value="no">{runLanguage === 'fr' ? 'Non' : 'No'}</option>
         </select>
       )
     }
@@ -316,7 +317,9 @@ function App() {
               <>
                 {needsMoreInfo ? (
                   <div className="callout" data-testid="needs-more-info">
-                    This run needs more information to proceed.
+                    {runLanguage === 'fr'
+                      ? 'Informations manquantes : repondez aux questions pour continuer.'
+                      : 'This run needs more information to proceed.'}
                   </div>
                 ) : null}
 
@@ -346,10 +349,20 @@ function App() {
                       disabled={isStarting || missingFollowUpCount > 0}
                       data-testid="follow-up-rerun"
                     >
-                      {isStarting ? 'Starting...' : 'Re-run with answers'}
+                      {isStarting
+                        ? runLanguage === 'fr'
+                          ? 'Demarrage...'
+                          : 'Starting...'
+                        : runLanguage === 'fr'
+                          ? 'Relancer avec reponses'
+                          : 'Re-run with answers'}
                     </button>
                     {missingFollowUpCount > 0 ? (
-                      <div className="muted small">Missing {missingFollowUpCount} answer(s).</div>
+                      <div className="muted small">
+                        {runLanguage === 'fr'
+                          ? `Reponse(s) manquante(s) : ${missingFollowUpCount}.`
+                          : `Missing ${missingFollowUpCount} answer(s).`}
+                      </div>
                     ) : null}
                   </div>
                 ) : null}
