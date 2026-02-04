@@ -71,11 +71,18 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question"],
+        "required": ["question_id", "question"],
         "properties": {
+          "question_id": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
           "question": {
             "type": "string",
             "maxLength": 500
+          },
+          "answer_type": {
+            "type": "string",
+            "enum": ["yes_no", "free_text", "number"]
           },
           "reason": {
             "type": "string",
@@ -113,4 +120,3 @@
     }
   }
 }
-

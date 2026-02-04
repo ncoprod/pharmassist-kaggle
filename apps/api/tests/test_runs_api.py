@@ -13,7 +13,12 @@ def test_create_run_returns_schema_compliant_run(tmp_path, monkeypatch):
     with TestClient(app) as client:
         resp = client.post(
             "/runs",
-            json={"case_ref": "case_000042", "language": "fr", "trigger": "manual"},
+            json={
+                "case_ref": "case_000042",
+                "language": "fr",
+                "trigger": "manual",
+                "follow_up_answers": [{"question_id": "q_fever", "answer": "no"}],
+            },
         )
         assert resp.status_code == 200
         payload = resp.json()

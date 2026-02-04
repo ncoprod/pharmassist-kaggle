@@ -5,7 +5,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-_CASE_REF_RE = re.compile(r"^case_\d{6}$")
+# Allow a small set of safe fixture ids. Keep it strict to avoid path traversal.
+# Examples: `case_000042`, `case_redflag_000101`, `case_lowinfo_000102`.
+_CASE_REF_RE = re.compile(r"^case_[a-z0-9_]{6,32}$")
 
 
 def load_case_bundle(case_ref: str) -> dict[str, Any]:

@@ -18,7 +18,9 @@
   ],
   "follow_up_questions": [
     {
+      "question_id": "q_pregnancy",
       "question": "Are you pregnant or breastfeeding?",
+      "answer_type": "yes_no",
       "reason": "Some products require extra caution depending on pregnancy/breastfeeding.",
       "priority": 1
     }
@@ -30,4 +32,3 @@
   },
   "confidence": 0.72
 }
-

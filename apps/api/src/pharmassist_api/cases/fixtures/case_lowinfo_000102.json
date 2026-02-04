@@ -1,0 +1,77 @@
+{
+  "case_ref": "case_lowinfo_000102",
+  "intake_extracted": {
+    "presenting_problem": "Unspecified symptom",
+    "red_flags": [],
+    "schema_version": "0.0.0",
+    "symptoms": [
+      {
+        "label": "unspecified symptom",
+        "notes": "Patient unable to describe symptom clearly; no additional details.",
+        "severity": "unknown"
+      }
+    ]
+  },
+  "intake_text_ocr": {
+    "en": "PATIENT NOTE (C\nR)\nAge: 34 yeaas \nSex: F\nChief ccomplant: Unspecified symptom\nSympt oms:\n- unspec  ified symptom (unknown, ?)\nContext:\n",
+    "fr": "NOTE PATI ENT (OCR)\nAge: 34 \nans\nSexee: F\nMottif: Symptom3 non 5pecifie\nSymptomes:\n\n- unspecified sym\nptom (unknown, ?)\nConntexte:\n"
+  },
+  "llm_context": {
+    "allergies": [],
+    "conditions": [],
+    "current_medications": [],
+    "demographics": {
+      "age_years": 34,
+      "sex": "F"
+    },
+    "schema_version": "0.0.0"
+  },
+  "products": [
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [
+        "pregnancy_unknown"
+      ],
+      "in_stock": true,
+      "ingredients": [
+        "cetirizine"
+      ],
+      "name": "Cetirizine 10mg (example)",
+      "price_eur": 4.99,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0001",
+      "stock_qty": 12
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "allergy",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "sodium_chloride"
+      ],
+      "name": "Saline nasal spray (example)",
+      "price_eur": 3.5,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0002",
+      "stock_qty": 8
+    },
+    {
+      "brand": "ExampleBrand",
+      "category": "derm",
+      "contraindication_tags": [],
+      "in_stock": true,
+      "ingredients": [
+        "glycerin"
+      ],
+      "name": "Moisturizing cream (example)",
+      "price_eur": 7.9,
+      "schema_version": "0.0.0",
+      "sku": "SKU-0003",
+      "stock_qty": 5
+    }
+  ],
+  "schema_version": "0.0.0",
+  "seed": 102
+}

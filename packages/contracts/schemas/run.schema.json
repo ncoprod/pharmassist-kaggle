@@ -41,6 +41,23 @@
         "trigger": {
           "type": "string",
           "enum": ["manual", "import", "ocr_upload", "scheduled_refresh"]
+        },
+        "follow_up_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["question_id", "answer"],
+            "properties": {
+              "question_id": {
+                "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+              },
+              "answer": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            }
+          }
         }
       }
     },
@@ -48,6 +65,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "intake_extracted": {
+          "$ref": "pharmassist://contracts/intake_extracted.schema.json"
+        },
         "report_markdown": {
           "type": "string",
           "maxLength": 20000
@@ -89,4 +109,3 @@
     }
   }
 }
-
