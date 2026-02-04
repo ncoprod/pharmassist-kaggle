@@ -89,7 +89,11 @@ def _tokenize_chat(tok: Any, user_content: str) -> dict[str, Any]:
             out = tok.apply_chat_template(
                 messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
             )
-            return {"input_ids": out}
+            # `apply_chat_template(..., tokenize=True)` may return only `input_ids`.
+            # Create an `attention_mask` to avoid undefined behavior warnings.
+            import torch  # type: ignore
+
+            return {"input_ids": out, "attention_mask": torch.ones_like(out)}
         except TypeError:
             # Fallback: render string then tokenize.
             rendered = tok.apply_chat_template(
@@ -149,7 +153,6 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
 
     inputs = _tokenize_chat(tok, prompt)
     inputs = {k: v.to(device) for k, v in inputs.items()}
-    input_len = inputs["input_ids"].shape[-1]
     out = model.generate(
         **inputs,
         max_new_tokens=max_new_tokens,
@@ -157,7 +160,8 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int) -> str:
         min_new_tokens=16,
         pad_token_id=tok.eos_token_id,
     )
-    return tok.decode(out[0][input_len:], skip_special_tokens=True)
+    # Conditional generation models return the completion sequence (no prompt prefix).
+    return tok.decode(out[0], skip_special_tokens=True)
 
 
 def main() -> int:
