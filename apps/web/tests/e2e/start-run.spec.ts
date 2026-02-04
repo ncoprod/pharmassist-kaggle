@@ -83,3 +83,23 @@ test('low-info case requires follow-up, rerun completes', async ({ page }) => {
   await expect(runStatus).not.toHaveText('created')
   await expect(runStatus).toHaveText('completed')
 })
+
+test('red-flag case escalates and does not recommend products', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByLabel('Case').fill('case_redflag_000101')
+  await page.getByTestId('start-run').click()
+
+  await expect(page.locator('[data-testid="error-banner"]')).toHaveCount(0)
+
+  const runStatus = page.getByTestId('run-status')
+  await expect(runStatus).toBeVisible()
+  await expect(runStatus).not.toHaveText('created')
+  await expect(runStatus).toHaveText('completed')
+
+  // Escalation callout should be visible in the recommendation panel.
+  await expect(page.getByText('Escalade recommandee')).toBeVisible()
+
+  // Safety: no products should be recommended when escalation is recommended.
+  await expect(page.locator('.productCard')).toHaveCount(0)
+})
