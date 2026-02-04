@@ -43,10 +43,14 @@ curl http://localhost:8000/healthz
 
 ```bash
 make lint
+npm -w apps/web run build
 make validate
 .venv/bin/pytest -q
 make e2e
 ```
+
+Note: `make e2e` starts and stops the API/web servers automatically for Playwright.
+For manual UI testing, run `make api-dev` and `make web-dev` in separate terminals.
 
 ## MedGemma / HAI-DEF smoke test (GPU recommended)
 
