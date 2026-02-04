@@ -82,7 +82,15 @@
           },
           "answer_type": {
             "type": "string",
-            "enum": ["yes_no", "free_text", "number"]
+            "enum": ["yes_no", "free_text", "number", "choice"]
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "maxItems": 20
           },
           "reason": {
             "type": "string",
