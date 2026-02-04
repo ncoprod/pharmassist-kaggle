@@ -13,7 +13,7 @@ from pharmassist_api.validators.rx_advice_lint import lint_rx_advice
 def test_report_and_handout_are_policy_safe_and_citations_valid():
     bundle = load_case_bundle("case_000042")
 
-    intake, reco, needs_more_info = triage_and_followup(
+    intake, reco, needs_more_info, _meta = triage_and_followup(
         intake_extracted=bundle["intake_extracted"],
         llm_context=bundle["llm_context"],
         follow_up_answers=[

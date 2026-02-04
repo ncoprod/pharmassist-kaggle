@@ -5,75 +5,14 @@ import unicodedata
 from typing import Any, Literal
 
 from pharmassist_api.contracts.validate_schema import validate_or_return_errors
+from pharmassist_api.steps.a3_followup_selector import maybe_select_followup_question_ids
+from pharmassist_api.steps.question_bank import load_question_bank
 
 SCHEMA_VERSION = "0.0.0"
 
 Language = Literal["fr", "en"]
 
-
-# Stable follow-up questions (used to associate answers across reruns).
-_QUESTION_BANK: dict[str, dict[str, Any]] = {
-    "q_duration": {
-        "priority": 1,
-        "answer_type": "number",
-        "question": {"fr": "Depuis combien de jours ?", "en": "How many days?"},
-        "reason": {
-            "fr": "La duree aide a differencier une situation benigne d'un probleme a evaluer.",
-            "en": "Duration helps distinguish self-limited issues from those needing evaluation.",
-        },
-    },
-    "q_fever": {
-        "priority": 2,
-        "answer_type": "yes_no",
-        "question": {"fr": "Avez-vous de la fievre ?", "en": "Do you have fever?"},
-        "reason": {
-            "fr": "La fievre peut orienter vers une infection ou une evaluation medicale.",
-            "en": "Fever may indicate infection or the need for medical evaluation.",
-        },
-    },
-    "q_temperature": {
-        "priority": 2,
-        "answer_type": "number",
-        "question": {
-            "fr": "Temperature maximale (°C) ?",
-            "en": "Max temperature (°C)?",
-        },
-        "reason": {
-            "fr": "Une temperature elevee (>= 39°C) est un signe d'alerte.",
-            "en": "High temperature (>= 39°C) is a red flag.",
-        },
-    },
-    "q_breathing": {
-        "priority": 1,
-        "answer_type": "yes_no",
-        "question": {
-            "fr": "Avez-vous une gene respiratoire ?",
-            "en": "Any breathing difficulty?",
-        },
-        "reason": {
-            "fr": "Une gene respiratoire est un signe d'alerte.",
-            "en": "Breathing difficulty is a red flag.",
-        },
-    },
-    "q_chest_pain": {
-        "priority": 1,
-        "answer_type": "yes_no",
-        "question": {"fr": "Douleur thoracique ?", "en": "Chest pain?"},
-        "reason": {
-            "fr": "La douleur thoracique est un signe d'alerte.",
-            "en": "Chest pain is a red flag.",
-        },
-    },
-    "q_pregnancy": {
-        "priority": 3,
-        "answer_type": "yes_no",
-        "question": {"fr": "Etes-vous enceinte ?", "en": "Are you pregnant?"},
-        "reason": {
-            "fr": "Certains produits necessitent des precautions en cas de grossesse.",
-            "en": "Some products require caution in pregnancy.",
-        },
-    },
-}
+TriageMeta = dict[str, Any]
 
 
 def triage_and_followup(
@@ -82,13 +21,14 @@ def triage_and_followup(
     llm_context: dict[str, Any],
     follow_up_answers: list[dict[str, Any]] | None,
     language: Language,
-) -> tuple[dict[str, Any], dict[str, Any], bool]:
+) -> tuple[dict[str, Any], dict[str, Any], bool, TriageMeta]:
     """Rules-first triage and follow-up funnel (Day 5).
 
     Returns:
       - updated intake_extracted (red_flags filled)
       - a schema-valid recommendation (ranked_products empty for Day 5)
       - needs_more_info flag (when follow-up questions are required but unanswered)
+      - meta (safe trace metadata, e.g. selector mode + ids; no OCR text)
     """
     answers = _answers_to_map(follow_up_answers)
 
@@ -104,10 +44,17 @@ def triage_and_followup(
 
     escalation = _escalation_for(red_flags, language)
     follow_up_questions: list[dict[str, Any]] = []
+    selector_meta: dict[str, Any] = {
+        "attempted": False,
+        "mode": "rules",
+        "max_k": 5,
+        "candidate_ids": [],
+        "selected_ids": [],
+    }
 
     # If there is any red flag, we escalate immediately and avoid asking more questions.
     if not red_flags:
-        follow_up_questions = _generate_follow_up_questions(
+        follow_up_questions, selector_meta = _generate_follow_up_questions(
             intake_extracted=intake_extracted,
             llm_context=llm_context,
             answers=answers,
@@ -157,7 +104,7 @@ def triage_and_followup(
         }
         needs_more_info = False
 
-    return intake_extracted, recommendation, needs_more_info
+    return intake_extracted, recommendation, needs_more_info, {"followup_selector": selector_meta}
 
 
 def _answers_to_map(follow_up_answers: list[dict[str, Any]] | None) -> dict[str, str]:
@@ -191,12 +138,14 @@ def _generate_follow_up_questions(
     llm_context: dict[str, Any],
     answers: dict[str, str],
     language: Language,
-) -> list[dict[str, Any]]:
-    needed_ids: set[str] = set()
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    required_ids: set[str] = set()
+    optional_ids: set[str] = set()
+    bank = load_question_bank()
 
     # Low-info cases need a minimal funnel.
     if _is_low_info(intake_extracted):
-        needed_ids |= {"q_duration", "q_fever", "q_breathing"}
+        required_ids |= {"q_duration", "q_fever", "q_breathing"}
     else:
         # Allergy-like symptoms: rule out fever/breathing issues.
         labels = [
@@ -210,7 +159,9 @@ def _generate_follow_up_questions(
             or ("itchy" in compact and "eye" in compact)
             or ("eternu" in compact)
         ):
-            needed_ids |= {"q_fever", "q_breathing"}
+            required_ids |= {"q_fever", "q_breathing"}
+            # Optional: helps refine advice without forcing extra questions in rules-only mode.
+            optional_ids |= {"q_allergy_severity"}
 
     # Ask duration if we don't have duration_days anywhere.
     has_duration = any(
@@ -218,41 +169,92 @@ def _generate_follow_up_questions(
         for s in (intake_extracted.get("symptoms") or [])
     )
     if not has_duration:
-        needed_ids.add("q_duration")
+        required_ids.add("q_duration")
 
     # Pregnancy question if unknown and sex is F.
     demo = llm_context.get("demographics") if isinstance(llm_context, dict) else None
     sex = demo.get("sex") if isinstance(demo, dict) else None
     preg = llm_context.get("pregnancy_status") if isinstance(llm_context, dict) else None
     if sex == "F" and preg is None:
-        needed_ids.add("q_pregnancy")
+        required_ids.add("q_pregnancy")
 
     # If fever is present, we need the max temperature to assess high fever (>= 39C).
     if _is_yes(answers.get("q_fever")) and "q_temperature" not in answers:
-        needed_ids.add("q_temperature")
+        required_ids.add("q_temperature")
 
     # Remove answered questions.
-    needed_ids = {qid for qid in needed_ids if qid not in answers}
+    required_ids = {qid for qid in required_ids if qid not in answers}
+    optional_ids = {qid for qid in optional_ids if qid not in answers}
 
-    # Materialize in stable priority order.
+    max_k = 5
+
+    # Candidate ids for the selector (closed allowlist). This may include optional candidates.
+    candidate_ids = sorted(
+        (required_ids | optional_ids),
+        key=lambda k: int((bank.get(k) or {}).get("priority", 9)),
+    )
+
+    # Optional MedGemma selector: choose a subset (closed allowlist).
+    selected_ids, selector_meta = maybe_select_followup_question_ids(
+        intake_extracted=intake_extracted,
+        llm_context=llm_context,
+        candidate_ids=candidate_ids,
+        question_bank=bank,
+        language=language,
+        max_k=max_k,
+    )
+
+    # Safety property: required questions are never dropped by the model.
+    required_sorted = sorted(
+        required_ids,
+        key=lambda k: int((bank.get(k) or {}).get("priority", 9)),
+    )
+    selected_sorted = sorted(
+        [qid for qid in (selected_ids or []) if qid not in required_ids],
+        key=lambda k: int((bank.get(k) or {}).get("priority", 9)),
+    )
+    ids_to_render: list[str] = []
+    for qid in required_sorted:
+        if len(ids_to_render) >= max_k:
+            break
+        ids_to_render.append(qid)
+    for qid in selected_sorted:
+        if len(ids_to_render) >= max_k:
+            break
+        ids_to_render.append(qid)
+
     items: list[dict[str, Any]] = []
-    for qid in sorted(
-        needed_ids,
-        key=lambda k: int(_QUESTION_BANK.get(k, {}).get("priority", 9)),
-    ):
-        base = _QUESTION_BANK.get(qid)
+    for qid in ids_to_render:
+        base = bank.get(qid)
         if not base:
             continue
+        q_map = base.get("question") if isinstance(base.get("question"), dict) else {}
+        r_map = base.get("reason") if isinstance(base.get("reason"), dict) else {}
+        question = q_map.get(language)
+        reason = r_map.get(language)
+        if not isinstance(question, str):
+            continue
+
+        payload: dict[str, Any] = {
+            "question_id": qid,
+            "question": question,
+            "answer_type": base.get("answer_type"),
+            "priority": base.get("priority"),
+        }
+        if isinstance(reason, str) and reason:
+            payload["reason"] = reason
+        if base.get("answer_type") == "choice" and isinstance(base.get("choices"), list):
+            payload["choices"] = base.get("choices")
         items.append(
-            {
-                "question_id": qid,
-                "question": base["question"][language],
-                "answer_type": base["answer_type"],
-                "reason": base["reason"][language],
-                "priority": base["priority"],
-            }
+            payload
         )
-    return items
+
+    selector_meta = {
+        **(selector_meta or {}),
+        "candidate_ids": candidate_ids,
+        "selected_ids": list(selected_ids or []),
+    }
+    return items, selector_meta
 
 
 def _detect_red_flags(text_blob_norm: str, answers: dict[str, str]) -> set[str]:

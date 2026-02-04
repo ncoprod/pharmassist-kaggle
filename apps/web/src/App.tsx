@@ -6,7 +6,8 @@ type FollowUpAnswer = { question_id: string; answer: string }
 type FollowUpQuestion = {
   question_id: string
   question: string
-  answer_type?: 'yes_no' | 'free_text' | 'number'
+  answer_type?: 'yes_no' | 'free_text' | 'number' | 'choice'
+  choices?: string[]
   reason?: string
   priority?: number
 }
@@ -177,6 +178,31 @@ function App() {
           onChange={(e) => setFollowUpAnswer(q.question_id, e.target.value)}
           data-testid={testId}
         />
+      )
+    }
+
+    if (q.answer_type === 'choice' && Array.isArray(q.choices) && q.choices.length > 0) {
+      return (
+        <select
+          value={value}
+          onChange={(e) => setFollowUpAnswer(q.question_id, e.target.value)}
+          data-testid={testId}
+        >
+          <option value="">—</option>
+          {q.choices.map((c) => (
+            <option key={c} value={c}>
+              {runLanguage === 'fr'
+                ? c === 'mild'
+                  ? 'Leger'
+                  : c === 'moderate'
+                    ? 'Modere'
+                    : c === 'severe'
+                      ? 'Severe'
+                      : c
+                : c}
+            </option>
+          ))}
+        </select>
       )
     }
 
