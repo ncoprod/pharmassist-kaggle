@@ -6,9 +6,32 @@
   "input": {
     "case_ref": "case_000042",
     "language": "fr",
-    "trigger": "manual"
+    "trigger": "manual",
+    "follow_up_answers": [
+      {
+        "question_id": "q_fever",
+        "answer": "no"
+      }
+    ]
   },
   "artifacts": {
+    "intake_extracted": {
+      "schema_version": "0.0.0",
+      "presenting_problem": "Sneezing and itchy eyes for one week",
+      "symptoms": [
+        {
+          "label": "sneezing",
+          "severity": "moderate",
+          "duration_days": 7
+        },
+        {
+          "label": "itchy eyes",
+          "severity": "mild",
+          "duration_days": 7
+        }
+      ],
+      "red_flags": []
+    },
     "report_markdown": "# Pharmacist report (synthetic)\n\nThis is an OTC/parapharmacy decision support demo.\n\nImportant: Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n",
     "handout_markdown": "# Patient handout (synthetic)\n\n- Follow the pharmacist instructions.\n- If symptoms worsen, consult a doctor.\n",
     "trace": {
@@ -48,4 +71,3 @@
   },
   "policy_violations": []
 }
-
