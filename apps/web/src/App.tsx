@@ -11,8 +11,32 @@ type FollowUpQuestion = {
   priority?: number
 }
 
+type RankedProduct = {
+  product_sku: string
+  score_0_100: number
+  why: string
+  evidence_refs?: string[]
+}
+
+type SafetyWarning = {
+  code: string
+  message: string
+  severity: 'BLOCKER' | 'WARN'
+  related_product_sku?: string
+}
+
+type Escalation = {
+  recommended: boolean
+  reason: string
+  suggested_service: string
+}
+
 type Recommendation = {
   follow_up_questions: FollowUpQuestion[]
+  ranked_products?: RankedProduct[]
+  safety_warnings?: SafetyWarning[]
+  escalation?: Escalation
+  confidence?: number
 }
 
 const EMPTY_FOLLOW_UP_ANSWERS: FollowUpAnswer[] = []
@@ -65,6 +89,9 @@ function App() {
   }, [run?.artifacts?.recommendation?.follow_up_questions])
   const needsMoreInfo = run?.status === 'needs_more_info' && followUpQuestions.length > 0
   const runLanguage = run?.input?.language ?? language
+  const rankedProducts = run?.artifacts?.recommendation?.ranked_products ?? []
+  const safetyWarnings = run?.artifacts?.recommendation?.safety_warnings ?? []
+  const escalation = run?.artifacts?.recommendation?.escalation
 
   const missingFollowUpCount = useMemo(() => {
     return followUpQuestions.filter((q) => {
@@ -366,6 +393,75 @@ function App() {
                     ) : null}
                   </div>
                 ) : null}
+              </>
+            )}
+          </section>
+
+          <section className="panel" data-testid="recommendation-panel">
+            <div className="panelTitle">Recommendation</div>
+            {!run ? (
+              <div className="muted">No run yet.</div>
+            ) : needsMoreInfo ? (
+              <div className="muted">
+                {runLanguage === 'fr'
+                  ? 'Completez les questions de suivi pour afficher des recommandations.'
+                  : 'Complete follow-up questions to show recommendations.'}
+              </div>
+            ) : (
+              <>
+                {escalation?.recommended ? (
+                  <div className="callout">
+                    <div className="qText">
+                      {runLanguage === 'fr' ? 'Escalade recommandee' : 'Escalation recommended'}
+                    </div>
+                    <div className="qReason">{escalation.reason}</div>
+                    <div className="muted small">{escalation.suggested_service}</div>
+                  </div>
+                ) : null}
+
+                <div className="subTitle">
+                  {runLanguage === 'fr' ? 'Alertes de securite' : 'Safety warnings'}
+                </div>
+                {safetyWarnings.length === 0 ? (
+                  <div className="muted small">—</div>
+                ) : (
+                  <div className="warningList">
+                    {safetyWarnings.map((w, idx) => (
+                      <div key={`${w.code}-${w.related_product_sku ?? ''}-${idx}`} className="warning">
+                        <span
+                          className={
+                            w.severity === 'BLOCKER' ? 'sev sevBlocker' : 'sev sevWarn'
+                          }
+                        >
+                          {w.severity}
+                        </span>
+                        <span className="warningMsg">
+                          {w.message}
+                          {w.related_product_sku ? ` (${w.related_product_sku})` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="subTitle">
+                  {runLanguage === 'fr' ? 'Top produits' : 'Top products'}
+                </div>
+                {rankedProducts.length === 0 ? (
+                  <div className="muted small">—</div>
+                ) : (
+                  <div className="productList">
+                    {rankedProducts.map((p) => (
+                      <div key={p.product_sku} className="productCard">
+                        <div className="productTop">
+                          <span className="mono">{p.product_sku}</span>
+                          <span className="score">{p.score_0_100}</span>
+                        </div>
+                        <div className="productWhy">{p.why}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </section>
