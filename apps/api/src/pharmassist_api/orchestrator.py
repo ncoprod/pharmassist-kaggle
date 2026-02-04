@@ -9,8 +9,10 @@ from typing import Any
 
 from . import db
 from .cases.load_case import load_case_bundle
+from .contracts.validate_schema import validate_instance
 from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi
 from .steps.a1_intake_extraction import extract_intake
+from .steps.a3_triage import triage_and_followup
 
 SCHEMA_VERSION = "0.0.0"
 
@@ -58,6 +60,21 @@ def emit_event(run_id: str, event_type: str, payload: dict[str, Any]) -> int:
 
 
 def new_run(*, case_ref: str, language: str, trigger: str) -> dict[str, Any]:
+    return new_run_with_answers(
+        case_ref=case_ref,
+        language=language,
+        trigger=trigger,
+        follow_up_answers=None,
+    )
+
+
+def new_run_with_answers(
+    *,
+    case_ref: str,
+    language: str,
+    trigger: str,
+    follow_up_answers: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
     run_id = str(uuid.uuid4())
     created_at = _now_iso()
 
@@ -66,10 +83,16 @@ def new_run(*, case_ref: str, language: str, trigger: str) -> dict[str, Any]:
         "run_id": run_id,
         "created_at": created_at,
         "status": "created",
-        "input": {"case_ref": case_ref, "language": language, "trigger": trigger},
+        "input": {
+            "case_ref": case_ref,
+            "language": language,
+            "trigger": trigger,
+            **({"follow_up_answers": follow_up_answers} if follow_up_answers else {}),
+        },
         "artifacts": {},
         "policy_violations": [],
     }
+    validate_instance(run, "run")
     db.create_run(run)
     return run
 
@@ -108,7 +131,10 @@ async def run_pipeline(run_id: str) -> None:
         {"step": "pipeline", "message": "Run started (synthetic demo).", "ts": _now_iso()},
     )
 
+    artifacts: dict[str, Any] = {}
     intake_extracted: dict[str, Any] | None = None
+    recommendation: dict[str, Any] | None = None
+    follow_up_answers = run.get("input", {}).get("follow_up_answers")
 
     for step in PIPELINE_STEPS:
         emit_event(
@@ -198,6 +224,45 @@ async def run_pipeline(run_id: str) -> None:
                 _RUN_QUEUES.pop(run_id, None)
                 return
             await asyncio.sleep(0.1)
+            artifacts["intake_extracted"] = intake_extracted
+
+        elif step == "A3_triage":
+            if not isinstance(intake_extracted, dict):
+                db.update_run(run_id, status="failed_safe", policy_violations=[])
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run failed_safe (missing intake_extracted).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
+
+            intake_extracted, recommendation, needs_more_info = triage_and_followup(
+                intake_extracted=intake_extracted,
+                llm_context=bundle.get("llm_context") or {},
+                follow_up_answers=(
+                    follow_up_answers if isinstance(follow_up_answers, list) else None
+                ),
+                language=language,
+            )
+            artifacts["intake_extracted"] = intake_extracted
+            artifacts["recommendation"] = recommendation
+            await asyncio.sleep(0.1)
+
+            if needs_more_info:
+                db.update_run(
+                    run_id,
+                    status="needs_more_info",
+                    artifacts=artifacts,
+                    policy_violations=[],
+                )
+                emit_event(
+                    run_id,
+                    "finalized",
+                    {"message": "Run needs_more_info (follow-up required).", "ts": _now_iso()},
+                )
+                _RUN_QUEUES.pop(run_id, None)
+                return
 
         else:
             # Simulate work; keeps the UI feeling alive without heavy computation.
@@ -231,12 +296,10 @@ async def run_pipeline(run_id: str) -> None:
         "- Si aggravation ou symptomes inhabituels: consultez un medecin.\n"
     )
 
-    db.update_run(
-        run_id,
-        status="completed",
-        artifacts={"report_markdown": report_md, "handout_markdown": handout_md},
-        policy_violations=[],
-    )
+    artifacts["report_markdown"] = report_md
+    artifacts["handout_markdown"] = handout_md
+
+    db.update_run(run_id, status="completed", artifacts=artifacts, policy_violations=[])
 
     emit_event(
         run_id,

@@ -11,13 +11,20 @@ from pydantic import BaseModel
 
 from pharmassist_api import db
 from pharmassist_api.contracts.validate_schema import validate_instance
-from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run, run_pipeline
+from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run_with_answers, run_pipeline
+
+
+class FollowUpAnswer(BaseModel):
+    question_id: str
+    answer: str
 
 
 class RunCreateRequest(BaseModel):
     case_ref: str = "case_000042"
     language: Literal["fr", "en"] = "fr"
     trigger: Literal["manual", "import", "ocr_upload", "scheduled_refresh"] = "manual"
+    follow_up_answers: list[FollowUpAnswer] | None = None
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -53,7 +60,15 @@ def root() -> dict[str, str]:
 
 @app.post("/runs")
 async def create_run(req: RunCreateRequest) -> dict[str, Any]:
-    run = new_run(case_ref=req.case_ref, language=req.language, trigger=req.trigger)
+    follow_up_answers = (
+        [a.model_dump() for a in req.follow_up_answers] if req.follow_up_answers else None
+    )
+    run = new_run_with_answers(
+        case_ref=req.case_ref,
+        language=req.language,
+        trigger=req.trigger,
+        follow_up_answers=follow_up_answers,
+    )
 
     # Ensure our API output follows the canonical contract early.
     validate_instance(run, "run")
