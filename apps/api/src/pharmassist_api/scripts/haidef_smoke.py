@@ -138,33 +138,61 @@ def _run_causal(model_id: str, prompt: str, *, max_new_tokens: int, debug: bool)
 
 
 def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int, debug: bool) -> str:
+    """Run MedGemma 4B IT (image-text-to-text) in text-only mode.
+
+    This follows the official model card guidance: use AutoProcessor +
+    AutoModelForImageTextToText.
+    """
     import torch  # type: ignore
-    from transformers import AutoTokenizer, Gemma3ForConditionalGeneration  # type: ignore
+    from transformers import AutoModelForImageTextToText, AutoProcessor  # type: ignore
 
     device = _pick_device()
-    dtype = torch.float16 if device in ("cuda", "mps") else torch.float32
+    if device == "cuda":
+        dtype = torch.bfloat16
+    elif device == "mps":
+        dtype = torch.float16
+    else:
+        dtype = torch.float32
 
-    tok = AutoTokenizer.from_pretrained(model_id)
-    model = Gemma3ForConditionalGeneration.from_pretrained(model_id, torch_dtype=dtype)
-    model.to(device)
-
-    inputs = _tokenize_chat(tok, prompt)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    input_len = inputs["input_ids"].shape[-1]
-    out = model.generate(
-        **inputs,
-        max_new_tokens=max_new_tokens,
-        do_sample=False,
-        pad_token_id=tok.eos_token_id,
+    model = AutoModelForImageTextToText.from_pretrained(
+        model_id,
+        torch_dtype=dtype,
+        device_map="auto" if device == "cuda" else None,
     )
-    seq = out[0]
-    completion = seq[input_len:] if seq.shape[-1] > input_len else seq
+    processor = AutoProcessor.from_pretrained(model_id)
+
+    system = (
+        "You are a medical information extraction system. "
+        "Output MUST be a single JSON object and nothing else."
+    )
+    messages = [
+        {"role": "system", "content": [{"type": "text", "text": system}]},
+        {"role": "user", "content": [{"type": "text", "text": prompt}]},
+    ]
+
+    inputs = processor.apply_chat_template(
+        messages,
+        add_generation_prompt=True,
+        tokenize=True,
+        return_dict=True,
+        return_tensors="pt",
+    ).to(model.device, dtype=dtype)
+
+    input_len = inputs["input_ids"].shape[-1]
+    with torch.inference_mode():
+        generation = model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+        )
+
+    gen = generation[0][input_len:]
     if debug:
         sys.stderr.write(
-            f"debug lens (conditional): input_len={input_len} out_len={seq.shape[-1]} "
-            f"device={device} sliced={seq.shape[-1] > input_len}\n"
+            f"debug lens (conditional): input_len={input_len} out_len={generation.shape[-1]} "
+            f"device={device}\n"
         )
-    return tok.decode(completion, skip_special_tokens=True)
+    return processor.decode(gen, skip_special_tokens=True)
 
 
 def main() -> int:
