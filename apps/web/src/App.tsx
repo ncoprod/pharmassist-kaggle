@@ -310,7 +310,7 @@ function App() {
               Case
               <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
             </label>
-            <button onClick={startRun} disabled={isStarting} data-testid="start-run">
+            <button onClick={() => void startRun()} disabled={isStarting} data-testid="start-run">
               {isStarting ? 'Starting...' : 'Start run'}
             </button>
           </div>
