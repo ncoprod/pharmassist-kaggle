@@ -131,7 +131,7 @@ def medgemma_extract_json(
         return None
 
     try:
-        tok, model, _mode, device = _load_model()
+        tok, model, mode, device = _load_model()
     except Exception:
         # Any failure here must not break the pipeline; we fallback deterministically.
         return None
@@ -156,7 +156,10 @@ def medgemma_extract_json(
     except Exception:
         return None
 
-    # `generate` returns prompt+completion; only decode newly generated tokens.
-    text = tok.decode(out[0][input_len:], skip_special_tokens=True)
+    if mode == "conditional":
+        # Conditional generation models return the completion sequence (no prompt prefix).
+        text = tok.decode(out[0], skip_special_tokens=True)
+    else:
+        # Causal LMs return prompt+completion; decode only the new tokens.
+        text = tok.decode(out[0][input_len:], skip_special_tokens=True)
     return {"_raw": text}
-
