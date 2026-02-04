@@ -1,11 +1,17 @@
+import pytest
+
 from pharmassist_api.cases.load_case import load_case_bundle
 from pharmassist_api.contracts.validate_schema import validate_instance
 
 
-def test_load_case_bundle_has_expected_shape():
-    bundle = load_case_bundle("case_000042")
+@pytest.mark.parametrize(
+    "case_ref",
+    ["case_000042", "case_redflag_000101", "case_lowinfo_000102"],
+)
+def test_load_case_bundle_has_expected_shape(case_ref: str):
+    bundle = load_case_bundle(case_ref)
 
-    assert bundle["case_ref"] == "case_000042"
+    assert bundle["case_ref"] == case_ref
 
     llm_context = bundle["llm_context"]
     assert validate_instance(llm_context, "llm_context") is None
@@ -16,4 +22,3 @@ def test_load_case_bundle_has_expected_shape():
 
     for p in bundle["products"]:
         assert validate_instance(p, "product") is None
-
