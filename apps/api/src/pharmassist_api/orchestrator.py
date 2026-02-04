@@ -254,7 +254,35 @@ async def run_pipeline(run_id: str) -> None:
             artifacts["recommendation"] = recommendation
             await asyncio.sleep(0.1)
 
+            # Audit-friendly events: which rules fired?
+            for rf in intake_extracted.get("red_flags") or []:
+                if isinstance(rf, str) and rf:
+                    emit_event(
+                        run_id,
+                        "rule_fired",
+                        {
+                            "step": step,
+                            "rule_id": rf,
+                            "severity": "WARN",
+                            "message": f"Red flag detected: {rf}",
+                        },
+                    )
+
             if needs_more_info:
+                emit_event(
+                    run_id,
+                    "rule_fired",
+                    {
+                        "step": step,
+                        "rule_id": "FOLLOW_UP_REQUIRED",
+                        "severity": "WARN",
+                        "message": (
+                            "Follow-up required "
+                            f"({len(recommendation.get('follow_up_questions') or [])} questions)."
+                        ),
+                    },
+                )
+                artifacts["trace"] = _build_trace_artifact(run_id)
                 db.update_run(
                     run_id,
                     status="needs_more_info",
@@ -289,6 +317,7 @@ async def run_pipeline(run_id: str) -> None:
                 )
                 artifacts["report_markdown"] = report_md
                 artifacts["handout_markdown"] = handout_md
+                artifacts["trace"] = _build_trace_artifact(run_id)
 
                 db.update_run(
                     run_id,
@@ -322,6 +351,18 @@ async def run_pipeline(run_id: str) -> None:
                     follow_up_answers if isinstance(follow_up_answers, list) else None
                 ),
                 products=bundle.get("products") or [],
+            )
+            emit_event(
+                run_id,
+                "tool_result",
+                {
+                    "step": step,
+                    "tool_name": "product_ranker",
+                    "result_summary": (
+                        f"ranked_products={len(ranked_products)} "
+                        f"excluded_warnings={len(ranker_warnings or [])}"
+                    ),
+                },
             )
             recommendation = dict(recommendation)
             recommendation["ranked_products"] = ranked_products
@@ -358,6 +399,15 @@ async def run_pipeline(run_id: str) -> None:
                 if isinstance(recommendation.get("escalation"), dict)
                 else None,
             )
+            emit_event(
+                run_id,
+                "tool_result",
+                {
+                    "step": step,
+                    "tool_name": "safety_engine",
+                    "result_summary": f"safety_warnings_added={len(safety or [])}",
+                },
+            )
             recommendation = dict(recommendation)
             recommendation["safety_warnings"] = _dedupe_warnings(
                 list(recommendation.get("safety_warnings") or []) + list(safety or [])
@@ -376,10 +426,24 @@ async def run_pipeline(run_id: str) -> None:
                 _RUN_QUEUES.pop(run_id, None)
                 return
 
+            emit_event(
+                run_id,
+                "tool_call",
+                {"step": step, "tool_name": "evidence_retrieval", "args_redacted": {"k": 5}},
+            )
             evidence_items = retrieve_evidence(
                 intake_extracted=intake_extracted,
                 llm_context=bundle.get("llm_context") or {},
                 k=5,
+            )
+            emit_event(
+                run_id,
+                "tool_result",
+                {
+                    "step": step,
+                    "tool_name": "evidence_retrieval",
+                    "result_summary": f"retrieved={len(evidence_items)}",
+                },
             )
             artifacts["evidence_items"] = evidence_items
 
@@ -467,6 +531,9 @@ async def run_pipeline(run_id: str) -> None:
             "- Si aggravation ou symptomes inhabituels: consultez un medecin.\n"
         )
 
+    # Build a redacted trace artifact for audit/debugging (no prompts, no OCR text).
+    artifacts["trace"] = _build_trace_artifact(run_id)
+
     db.update_run(run_id, status="completed", artifacts=artifacts, policy_violations=[])
 
     emit_event(
@@ -507,3 +574,94 @@ def _dedupe_warnings(warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         out.append(w)
     return out
+
+
+def _build_trace_artifact(run_id: str) -> dict[str, Any]:
+    """Assemble a redacted trace artifact from stored events.
+
+    The trace is contract-validated and intentionally excludes any raw OCR text or prompts.
+    """
+    events: list[dict[str, Any]] = []
+
+    for item in db.list_events(run_id):
+        data = item.get("data") or {}
+        if not isinstance(data, dict):
+            continue
+        etype = data.get("type")
+        ts = data.get("ts")
+        if not isinstance(etype, str) or not etype:
+            continue
+        if not isinstance(ts, str) or not ts:
+            ts = _now_iso()
+
+        if etype == "policy_violation":
+            # Current pipeline may emit a list of violations; convert to one event per violation.
+            viols = data.get("violations")
+            if isinstance(viols, list) and viols:
+                for v in viols:
+                    if not isinstance(v, dict):
+                        continue
+                    events.append(
+                        {
+                            "event_id": str(uuid.uuid4()),
+                            "ts": ts,
+                            "type": "policy_violation",
+                            "violation": v,
+                            "message": str(data.get("message") or "Policy violation."),
+                        }
+                    )
+            continue
+
+        ev: dict[str, Any] = {"event_id": str(uuid.uuid4()), "ts": ts, "type": etype}
+
+        step = data.get("step")
+        if isinstance(step, str) and step:
+            ev["step"] = step
+        msg = data.get("message")
+        if isinstance(msg, str) and msg:
+            ev["message"] = msg
+
+        if etype in {"tool_call", "tool_result"}:
+            tool_name = data.get("tool_name")
+            if not isinstance(tool_name, str) or not tool_name:
+                continue
+            ev["tool_name"] = tool_name
+            if etype == "tool_call":
+                args_redacted = data.get("args_redacted")
+                if isinstance(args_redacted, dict):
+                    ev["args_redacted"] = args_redacted
+            else:
+                result_summary = data.get("result_summary")
+                if isinstance(result_summary, str) and result_summary:
+                    ev["result_summary"] = result_summary
+
+        if etype == "rule_fired":
+            rule_id = data.get("rule_id")
+            if not isinstance(rule_id, str) or not rule_id:
+                continue
+            ev["rule_id"] = rule_id
+            sev = data.get("severity")
+            if isinstance(sev, str) and sev:
+                ev["severity"] = sev
+
+        events.append(ev)
+
+    trace = {
+        "schema_version": SCHEMA_VERSION,
+        "trace_id": str(uuid.uuid4()),
+        "run_id": run_id,
+        "events": events,
+    }
+
+    # If anything doesn't validate, fall back to an empty trace.
+    try:
+        validate_instance(trace, "trace")
+    except Exception:
+        trace = {
+            "schema_version": SCHEMA_VERSION,
+            "trace_id": str(uuid.uuid4()),
+            "run_id": run_id,
+            "events": [],
+        }
+
+    return trace
