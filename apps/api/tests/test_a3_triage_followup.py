@@ -14,7 +14,7 @@ def test_triage_generates_follow_up_questions_for_allergy_case():
     }
     llm_context = {"demographics": {"age_years": 21, "sex": "F"}, "schema_version": "0.0.0"}
 
-    updated, reco, needs_more_info = triage_and_followup(
+    updated, reco, needs_more_info, _meta = triage_and_followup(
         intake_extracted=intake,
         llm_context=llm_context,
         follow_up_answers=None,
@@ -37,7 +37,7 @@ def test_triage_escalates_on_red_flags():
     }
     llm_context = {"demographics": {"age_years": 55, "sex": "M"}, "schema_version": "0.0.0"}
 
-    updated, reco, needs_more_info = triage_and_followup(
+    updated, reco, needs_more_info, _meta = triage_and_followup(
         intake_extracted=intake,
         llm_context=llm_context,
         follow_up_answers=None,
@@ -70,7 +70,7 @@ def test_triage_no_follow_up_when_answers_present():
         {"question_id": "q_pregnancy", "answer": "no"},
     ]
 
-    updated, reco, needs_more_info = triage_and_followup(
+    updated, reco, needs_more_info, _meta = triage_and_followup(
         intake_extracted=intake,
         llm_context=llm_context,
         follow_up_answers=answers,
@@ -97,7 +97,7 @@ def test_high_fever_temperature_triggers_red_flag():
         {"question_id": "q_temperature", "answer": "39.5"},
     ]
 
-    updated, reco, needs_more_info = triage_and_followup(
+    updated, reco, needs_more_info, _meta = triage_and_followup(
         intake_extracted=intake,
         llm_context=llm_context,
         follow_up_answers=answers,
