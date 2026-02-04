@@ -136,6 +136,43 @@ else:
   --max-new-tokens 256
 ```
 
+```python
+# 6) Run the full pipeline (A1 uses MedGemma; A7 report can also use MedGemma)
+#
+# IMPORTANT: do NOT use asyncio.run(...) inside notebooks (an event loop is already running).
+# Use top-level `await` instead.
+import os, sys
+sys.path.insert(0, "apps/api/src")
+
+os.environ["PHARMASSIST_DB_PATH"] = "/kaggle/working/pharmassist_demo.db"
+os.environ["PHARMASSIST_USE_MEDGEMMA"] = "1"
+os.environ["PHARMASSIST_MEDGEMMA_MODEL"] = "google/medgemma-4b-it"
+os.environ["PHARMASSIST_USE_MEDGEMMA_REPORT"] = "1"  # optional
+
+from pharmassist_api import db, orchestrator
+
+db.init_db()
+run = orchestrator.new_run_with_answers(
+    case_ref="case_000042",
+    language="en",
+    trigger="manual",
+    follow_up_answers=[
+        {"question_id": "q_fever", "answer": "no"},
+        {"question_id": "q_breathing", "answer": "no"},
+        {"question_id": "q_pregnancy", "answer": "no"},
+    ],
+)
+
+await orchestrator.run_pipeline(run["run_id"])
+r = db.get_run(run["run_id"])
+
+print("status:", r["status"])
+print("symptoms:", [s["label"] for s in r["artifacts"]["intake_extracted"]["symptoms"]])
+print("ranked_products:", len(r["artifacts"]["recommendation"].get("ranked_products", [])))
+print("evidence_items:", len(r["artifacts"].get("evidence_items", [])))
+print("\\n--- report head ---\\n", r["artifacts"].get("report_markdown", "")[:600])
+```
+
 ## Running the API with MedGemma enabled (optional)
 
 By default, the API uses the deterministic fallback extractor.
