@@ -19,16 +19,46 @@ def db_path() -> Path:
         return Path(env)
     return repo_root() / ".data" / "pharmassist.db"
 
+def _ensure_parent_dir(path: Path) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # If this fails, sqlite will raise a more actionable OperationalError below.
+        pass
+
 
 def _connect() -> sqlite3.Connection:
     path = db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_parent_dir(path)
+
     # sqlite3.connect accepts PathLike, but convert explicitly to str to avoid
     # platform-specific edge cases (observed flakiness on some temp paths).
-    conn = sqlite3.connect(str(path), check_same_thread=False)
+    #
+    # We also retry once: some environments can delete temp dirs during test runs
+    # (e.g. concurrent pytest sessions). Retrying after re-creating the parent dir
+    # makes tests and local dev more robust.
+    last_err: sqlite3.OperationalError | None = None
+    conn: sqlite3.Connection | None = None
+    for _attempt in range(2):
+        try:
+            conn = sqlite3.connect(str(path), check_same_thread=False)
+            break
+        except sqlite3.OperationalError as e:
+            last_err = e
+            _ensure_parent_dir(path)
+            conn = None
+    if conn is None:
+        assert last_err is not None
+        raise last_err
+
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
+    # Best-effort WAL mode (reduces lock contention). Some temp dirs / FS setups
+    # may not support WAL reliably; fall back silently.
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+    except sqlite3.OperationalError:
+        pass
     # Avoid transient "database is locked" errors under light concurrency.
     conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
