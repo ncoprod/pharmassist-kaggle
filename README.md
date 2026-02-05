@@ -94,9 +94,13 @@ venv** and run from source via `PYTHONPATH`.
 Suggested notebook cells (in order):
 
 ```python
-# 1) Clone
+# 1) Clone (or refresh)
+#
+# If you rerun the notebook, you can either delete and re-clone:
+!rm -rf pharmassist-kaggle
 !git clone https://github.com/ncoprod/pharmassist-kaggle.git
 %cd /kaggle/working/pharmassist-kaggle
+!git rev-parse --short HEAD
 ```
 
 ```python
