@@ -5,6 +5,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from pharmassist_api.contracts.validate_schema import validate_or_return_errors
+
 
 @lru_cache(maxsize=1)
 def load_question_bank() -> dict[str, dict[str, Any]]:
@@ -18,7 +20,12 @@ def load_question_bank() -> dict[str, dict[str, Any]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return {}
+        raise ValueError("question_bank.json is not valid JSON") from None
+
+    issues = validate_or_return_errors(data, "question_bank")
+    if issues:
+        first = issues[0]
+        raise ValueError(f"question_bank.json failed schema validation at {first.json_path}: {first.message}")
 
     bank = data.get("bank")
     if not isinstance(bank, dict):
@@ -32,4 +39,3 @@ def load_question_bank() -> dict[str, dict[str, Any]]:
             continue
         out[qid] = raw
     return out
-

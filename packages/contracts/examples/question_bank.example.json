@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.0.0",
+  "bank": {
+    "q_primary_domain": {
+      "priority": 1,
+      "answer_type": "choice",
+      "choices": ["respiratory", "digestive", "skin", "pain", "eye", "urology", "allergy_ent", "other"],
+      "tags": ["general", "routing", "low_info"],
+      "question": {
+        "fr": "Quel est le domaine principal du probleme ?",
+        "en": "What is the main symptom domain?"
+      },
+      "reason": {
+        "fr": "Choisir un domaine permet de poser les bonnes questions sans texte libre.",
+        "en": "Choosing a domain helps route to the right questions without free text."
+      }
+    }
+  }
+}
+

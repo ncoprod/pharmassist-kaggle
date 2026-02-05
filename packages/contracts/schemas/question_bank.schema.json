@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/question_bank.schema.json",
+  "title": "Question Bank (closed allowlist)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bank"],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "bank": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^q_[a-z0-9_]{2,64}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/question"
+      }
+    }
+  },
+  "$defs": {
+    "localized_text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fr", "en"],
+      "properties": {
+        "fr": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        },
+        "en": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["priority", "answer_type", "tags", "question", "reason"],
+      "properties": {
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "answer_type": {
+          "type": "string",
+          "enum": ["yes_no", "number", "choice"]
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "minItems": 1,
+          "maxItems": 30
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "minItems": 1,
+          "maxItems": 30
+        },
+        "question": {
+          "$ref": "#/$defs/localized_text"
+        },
+        "reason": {
+          "$ref": "#/$defs/localized_text"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "answer_type": { "const": "choice" } }
+          },
+          "then": {
+            "required": ["choices"]
+          },
+          "else": {
+            "not": { "required": ["choices"] }
+          }
+        }
+      ]
+    }
+  }
+}
+
