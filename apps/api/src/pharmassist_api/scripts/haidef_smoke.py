@@ -33,11 +33,6 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print extra diagnostics (lengths, hashes).",
     )
-    p.add_argument(
-        "--print-raw-output",
-        action="store_true",
-        help="Print raw model output on failure (unsafe; use only with synthetic cases).",
-    )
     return p.parse_args()
 
 
@@ -263,8 +258,6 @@ def main() -> int:
         if args.debug:
             sha12 = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
             sys.stderr.write(f"raw_len={len(raw)} sha256_12={sha12}\n")
-        if args.print_raw_output:
-            sys.stderr.write(f"repr(head)={raw[:400]!r}\n")
         return 1
 
     parsed.setdefault("schema_version", "0.0.0")
@@ -276,9 +269,6 @@ def main() -> int:
         if args.debug:
             sha12 = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
             sys.stderr.write(f"\nraw_len={len(raw)} sha256_12={sha12}\n")
-        if args.print_raw_output:
-            sys.stderr.write("\nRaw model output (truncated):\n")
-            sys.stderr.write(raw[:2000] + "\n")
         return 1
 
     sys.stdout.write(json.dumps(parsed, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
