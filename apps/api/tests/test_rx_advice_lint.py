@@ -17,10 +17,25 @@ def test_rx_advice_lint_allows_disclaimer():
     assert not violations
 
 
+def test_rx_advice_lint_blocks_start_rx():
+    violations = lint_rx_advice(
+        "Commencez l'antibiotique de votre ordonnance.",
+        path="$.artifacts.report_markdown",
+    )
+    assert any(v.code == "RX_ADVICE" and v.severity == "BLOCKER" for v in violations)
+
+
+def test_rx_advice_lint_allows_do_not_start_disclaimer():
+    violations = lint_rx_advice(
+        "Do not start or stop prescription medication without medical advice.",
+        path="$.artifacts.report_markdown",
+    )
+    assert not violations
+
+
 def test_rx_advice_lint_allows_generic_referral():
     violations = lint_rx_advice(
         "If symptoms worsen, consult a doctor.",
         path="$.artifacts.handout_markdown",
     )
     assert not violations
-

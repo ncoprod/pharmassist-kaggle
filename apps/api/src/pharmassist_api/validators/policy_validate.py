@@ -42,5 +42,43 @@ def validate_payload(payload: Any, *, schema_name: str) -> list[Violation]:
             if isinstance(handout, str):
                 violations.extend(lint_rx_advice(handout, path="$.artifacts.handout_markdown"))
 
-    return violations
+            # Defense-in-depth: lint other user-facing strings (not only markdown).
+            reco = artifacts.get("recommendation")
+            if isinstance(reco, dict):
+                ranked = reco.get("ranked_products")
+                if isinstance(ranked, list):
+                    for idx, item in enumerate(ranked):
+                        if not isinstance(item, dict):
+                            continue
+                        why = item.get("why")
+                        if isinstance(why, str):
+                            violations.extend(
+                                lint_rx_advice(
+                                    why,
+                                    path=f"$.artifacts.recommendation.ranked_products[{idx}].why",
+                                )
+                            )
 
+                safety_warnings = reco.get("safety_warnings")
+                if isinstance(safety_warnings, list):
+                    for idx, item in enumerate(safety_warnings):
+                        if not isinstance(item, dict):
+                            continue
+                        msg = item.get("message")
+                        if isinstance(msg, str):
+                            violations.extend(
+                                lint_rx_advice(
+                                    msg,
+                                    path=f"$.artifacts.recommendation.safety_warnings[{idx}].message",
+                                )
+                            )
+
+                escalation = reco.get("escalation")
+                if isinstance(escalation, dict):
+                    reason = escalation.get("reason")
+                    if isinstance(reason, str):
+                        violations.extend(
+                            lint_rx_advice(reason, path="$.artifacts.recommendation.escalation.reason")
+                        )
+
+    return violations

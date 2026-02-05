@@ -15,12 +15,13 @@ def _normalize_text(text: str) -> str:
 
 _ALLOWLIST_RE = re.compile(
     r"(?i)\b(ne|n')\s*(modifi(?:ez|er)|arret(?:ez|er)|stoppez|stopper|"
-    r"chang(?:ez|er)|augment(?:ez|er)|diminu(?:ez|er)).{0,60}\b"
+    r"chang(?:ez|er)|augment(?:ez|er)|diminu(?:ez|er)|commenc(?:ez|er)|"
+    r"debut(?:ez|er)|repren(?:ez|dre)|suspend(?:ez|re)|interromp(?:ez|re)).{0,60}\b"
     r"(traitement|posologie|dose|ordonnance)\b.{0,60}\b(sans avis|sans l'avis)\b"
 )
 
 _ALLOWLIST_EN_RE = re.compile(
-    r"(?i)\bdo\s+not\b.{0,30}\b(change|stop|increase|decrease)\b.{0,60}\b"
+    r"(?i)\bdo\s+not\b.{0,30}\b(change|stop|discontinue|start|initiate|resume|hold|taper|increase|decrease)\b.{0,60}\b"
     r"(prescription|medication|dose)\b"
 )
 
@@ -31,9 +32,21 @@ _BLOCK_RE = re.compile(
     r"insuline|antidepresseur|chimiotherapie)\b"
 )
 
+_BLOCK_START_RE = re.compile(
+    r"(?i)\b(commenc(?:ez|er)|debut(?:ez|er)|repren(?:ez|dre)|initier|initiez|"
+    r"suspend(?:ez|re)|interromp(?:ez|re))\b.{0,60}\b("
+    r"ordonnance|antibiotique|corticoide|anticoagulant|insuline|antidepresseur|"
+    r"chimiotherapie)\b"
+)
+
 _BLOCK_EN_RE = re.compile(
     r"(?i)\b(stop|discontinue|change|increase|decrease)\b.{0,60}\b"
     r"(prescription|medication|dose)\b"
+)
+
+_BLOCK_START_EN_RE = re.compile(
+    r"(?i)\b(start|initiate|resume|hold|taper)\b.{0,60}\b("
+    r"prescription|antibiotic|steroid|anticoagulant|insulin|antidepressant|chemotherapy)\b"
 )
 
 
@@ -47,7 +60,12 @@ def lint_rx_advice(text: str, *, path: str) -> list[Violation]:
     if _ALLOWLIST_RE.search(normalized) or _ALLOWLIST_EN_RE.search(normalized):
         return []
 
-    if _BLOCK_RE.search(normalized) or _BLOCK_EN_RE.search(normalized):
+    if (
+        _BLOCK_RE.search(normalized)
+        or _BLOCK_START_RE.search(normalized)
+        or _BLOCK_EN_RE.search(normalized)
+        or _BLOCK_START_EN_RE.search(normalized)
+    ):
         return [
             Violation(
                 code="RX_ADVICE",
