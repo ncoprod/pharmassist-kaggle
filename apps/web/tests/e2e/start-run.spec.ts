@@ -92,3 +92,26 @@ test('red-flag case escalates and does not recommend products', async ({ page })
   // Safety: no products should be recommended when escalation is recommended.
   await expect(page.locator('.productCard')).toHaveCount(0)
 })
+
+test('patients flow: search -> open -> start run from visit', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTestId('tab-patients').click()
+
+  await page.getByTestId('patient-search').fill('pt_000000')
+  await page.getByTestId('patient-search-btn').click()
+
+  await expect(page.getByTestId('patient-result-pt_000000')).toBeVisible()
+  await page.getByTestId('patient-result-pt_000000').click()
+
+  await expect(page.getByTestId('patient-detail-ref')).toHaveText('pt_000000')
+
+  const startButtons = page.locator('[data-testid^="start-run-visit-"]')
+  await expect(startButtons.first()).toBeVisible()
+  await startButtons.first().click()
+
+  const runStatus = page.getByTestId('run-status')
+  await expect(runStatus).toBeVisible()
+  await expect(runStatus).not.toHaveText('created')
+  await expect(runStatus).toHaveText('completed')
+})
