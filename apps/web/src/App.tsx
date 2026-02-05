@@ -83,6 +83,8 @@ type Run = {
   status: string
   input?: {
     case_ref: string
+    patient_ref?: string
+    visit_ref?: string
     language: 'fr' | 'en'
     trigger: string
     follow_up_answers?: FollowUpAnswer[]
@@ -105,18 +107,45 @@ type RunEvent = {
   [k: string]: unknown
 }
 
+type PatientSearchItem = {
+  patient_ref: string
+  demographics?: { age_years?: number; sex?: string }
+}
+
+type PatientDetail = {
+  patient_ref: string
+  llm_context: {
+    demographics?: { age_years?: number; sex?: string }
+    [k: string]: unknown
+  }
+}
+
+type VisitSummary = {
+  visit_ref: string
+  occurred_at: string
+  primary_domain?: string | null
+  intents?: string[]
+  presenting_problem?: string
+}
+
 function App() {
   const apiBase = useMemo(() => {
     return import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
   }, [])
 
   const [language, setLanguage] = useState<'fr' | 'en'>('fr')
+  const [activeTab, setActiveTab] = useState<'run' | 'patients'>('run')
   const [caseRef, setCaseRef] = useState('case_000042')
   const [run, setRun] = useState<Run | null>(null)
   const [events, setEvents] = useState<Array<{ id: number; data: RunEvent }>>([])
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
+  const [patientQuery, setPatientQuery] = useState('')
+  const [patientResults, setPatientResults] = useState<PatientSearchItem[]>([])
+  const [selectedPatient, setSelectedPatient] = useState<PatientDetail | null>(null)
+  const [patientVisits, setPatientVisits] = useState<VisitSummary[]>([])
+  const [isPatientsLoading, setIsPatientsLoading] = useState(false)
   const esRef = useRef<EventSource | null>(null)
   const seenIdsRef = useRef<Set<number>>(new Set())
 
@@ -260,7 +289,12 @@ function App() {
     )
   }
 
-  async function startRun(opts?: { follow_up_answers?: FollowUpAnswer[] }) {
+  async function startRun(opts?: {
+    follow_up_answers?: FollowUpAnswer[]
+    case_ref?: string
+    patient_ref?: string
+    visit_ref?: string
+  }) {
     setError(null)
     setRun(null)
     setEvents([])
@@ -268,15 +302,23 @@ function App() {
     setIsStarting(true)
 
     try {
+      const body: Record<string, unknown> = {
+        language,
+        trigger: 'manual',
+        ...(opts?.follow_up_answers ? { follow_up_answers: opts.follow_up_answers } : {}),
+      }
+
+      if (opts?.visit_ref) {
+        body.visit_ref = opts.visit_ref
+        if (opts.patient_ref) body.patient_ref = opts.patient_ref
+      } else {
+        body.case_ref = opts?.case_ref ?? caseRef
+      }
+
       const resp = await fetch(`${apiBase}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          case_ref: caseRef,
-          language,
-          trigger: 'manual',
-          ...(opts?.follow_up_answers ? { follow_up_answers: opts.follow_up_answers } : {}),
-        }),
+        body: JSON.stringify(body),
       })
 
       if (!resp.ok) {
@@ -355,7 +397,67 @@ function App() {
       question_id: q.question_id,
       answer: (followUpAnswers[q.question_id] ?? '').trim(),
     }))
-    await startRun({ follow_up_answers: payload })
+    await startRun({
+      follow_up_answers: payload,
+      case_ref: run?.input?.case_ref,
+      patient_ref: run?.input?.patient_ref,
+      visit_ref: run?.input?.visit_ref,
+    })
+  }
+
+  async function searchPatients() {
+    const q = patientQuery.trim()
+    if (!q) {
+      setPatientResults([])
+      return
+    }
+    setError(null)
+    setIsPatientsLoading(true)
+    try {
+      const resp = await fetch(`${apiBase}/patients?query=${encodeURIComponent(q)}`)
+      if (!resp.ok) {
+        setError(`Failed to search patients (${resp.status}).`)
+        return
+      }
+      const data = (await resp.json()) as { patients?: PatientSearchItem[] }
+      setPatientResults(Array.isArray(data.patients) ? data.patients : [])
+    } catch {
+      setError(`Cannot reach API at ${apiBase}.`)
+    } finally {
+      setIsPatientsLoading(false)
+    }
+  }
+
+  async function openPatient(patientRef: string) {
+    setError(null)
+    setIsPatientsLoading(true)
+    try {
+      const [pResp, vResp] = await Promise.all([
+        fetch(`${apiBase}/patients/${encodeURIComponent(patientRef)}`),
+        fetch(`${apiBase}/patients/${encodeURIComponent(patientRef)}/visits`),
+      ])
+      if (!pResp.ok) {
+        setError(`Failed to load patient (${pResp.status}).`)
+        return
+      }
+      if (!vResp.ok) {
+        setError(`Failed to load visits (${vResp.status}).`)
+        return
+      }
+      const p = (await pResp.json()) as PatientDetail
+      const v = (await vResp.json()) as { visits?: VisitSummary[] }
+      setSelectedPatient(p)
+      setPatientVisits(Array.isArray(v.visits) ? v.visits : [])
+    } catch {
+      setError(`Cannot reach API at ${apiBase}.`)
+    } finally {
+      setIsPatientsLoading(false)
+    }
+  }
+
+  async function startRunFromVisit(patientRef: string, visitRef: string) {
+    setActiveTab('run')
+    await startRun({ patient_ref: patientRef, visit_ref: visitRef })
   }
 
   return (
@@ -365,10 +467,26 @@ function App() {
           <div>
             <div className="title">PharmAssist AI — Kaggle Demo</div>
             <div className="subtitle">
-              Day 5: Follow-up questions + rerun (synthetic-only, no PHI)
+              Feb 6: Patients + pharmacy-year dataset (synthetic-only, no PHI)
             </div>
           </div>
           <div className="controls">
+            <div className="tabs">
+              <button
+                className={`tab ${activeTab === 'run' ? 'tabActive' : ''}`}
+                onClick={() => setActiveTab('run')}
+                data-testid="tab-run"
+              >
+                Run
+              </button>
+              <button
+                className={`tab ${activeTab === 'patients' ? 'tabActive' : ''}`}
+                onClick={() => setActiveTab('patients')}
+                data-testid="tab-patients"
+              >
+                Patients
+              </button>
+            </div>
             <label>
               Lang
               <select value={language} onChange={(e) => setLanguage(e.target.value as 'fr' | 'en')}>
@@ -376,13 +494,17 @@ function App() {
                 <option value="en">EN</option>
               </select>
             </label>
-            <label>
-              Case
-              <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
-            </label>
-            <button onClick={() => void startRun()} disabled={isStarting} data-testid="start-run">
-              {isStarting ? 'Starting...' : 'Start run'}
-            </button>
+            {activeTab === 'run' ? (
+              <>
+                <label>
+                  Case
+                  <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
+                </label>
+                <button onClick={() => void startRun()} disabled={isStarting} data-testid="start-run">
+                  {isStarting ? 'Starting...' : 'Start run'}
+                </button>
+              </>
+            ) : null}
           </div>
         </header>
 
@@ -392,7 +514,110 @@ function App() {
           </div>
         ) : null}
 
-        <main className="grid">
+        {activeTab === 'patients' ? (
+          <main className="grid">
+            <section className="panel">
+              <div className="panelTitleRow">
+                <div className="panelTitle">Patients</div>
+              </div>
+              <div className="row">
+                <input
+                  value={patientQuery}
+                  onChange={(e) => setPatientQuery(e.target.value)}
+                  placeholder="pt_0000…"
+                  data-testid="patient-search"
+                />
+                <button
+                  className="printBtn"
+                  onClick={() => void searchPatients()}
+                  disabled={isPatientsLoading}
+                  data-testid="patient-search-btn"
+                >
+                  {isPatientsLoading ? 'Searching…' : 'Search'}
+                </button>
+              </div>
+              <div className="muted">Search by `patient_ref` prefix (synthetic-only).</div>
+
+              <div className="patientsList">
+                {patientResults.length === 0 ? (
+                  <div className="muted">No results.</div>
+                ) : (
+                  patientResults.map((p) => (
+                    <div key={p.patient_ref} className="qCard">
+                      <div className="qHeader">
+                        <div className="qText mono">{p.patient_ref}</div>
+                        <button
+                          className="printBtn"
+                          onClick={() => void openPatient(p.patient_ref)}
+                          data-testid={`patient-result-${p.patient_ref}`}
+                        >
+                          Open
+                        </button>
+                      </div>
+                      <div className="muted">
+                        age={p.demographics?.age_years ?? '—'} sex={p.demographics?.sex ?? '—'}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panelTitle">Patient</div>
+              {selectedPatient ? (
+                <>
+                  <div className="kv">
+                    <div>
+                      <span className="k">patient_ref</span>
+                      <span className="v mono" data-testid="patient-detail-ref">
+                        {selectedPatient.patient_ref}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="k">age</span>
+                      <span className="v">{selectedPatient.llm_context?.demographics?.age_years ?? '—'}</span>
+                    </div>
+                    <div>
+                      <span className="k">sex</span>
+                      <span className="v">{selectedPatient.llm_context?.demographics?.sex ?? '—'}</span>
+                    </div>
+                  </div>
+
+                  <div className="subTitle">Visits</div>
+                  <div className="patientsList">
+                    {patientVisits.length === 0 ? (
+                      <div className="muted">No visits.</div>
+                    ) : (
+                      patientVisits.map((v) => (
+                        <div key={v.visit_ref} className="qCard">
+                          <div className="qHeader">
+                            <div className="qText">
+                              {v.occurred_at} — {v.presenting_problem || v.primary_domain || '—'}
+                            </div>
+                            <button
+                              className="printBtn"
+                              onClick={() => void startRunFromVisit(selectedPatient.patient_ref, v.visit_ref)}
+                              data-testid={`start-run-visit-${v.visit_ref}`}
+                            >
+                              Start run
+                            </button>
+                          </div>
+                          <div className="muted">
+                            domain={v.primary_domain ?? '—'} intents={(v.intents ?? []).join(', ') || '—'}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="muted">Select a patient from the search results.</div>
+              )}
+            </section>
+          </main>
+        ) : (
+          <main className="grid">
           <section className="panel">
             <div className="panelTitle">Run</div>
             {run ? (
@@ -661,7 +886,8 @@ function App() {
               <pre className="mono pre">{run?.artifacts?.handout_markdown ?? '—'}</pre>
             </div>
           </section>
-        </main>
+          </main>
+        )}
       </div>
     </>
   )

@@ -76,6 +76,8 @@ def new_run(*, case_ref: str, language: str, trigger: str) -> dict[str, Any]:
 def new_run_with_answers(
     *,
     case_ref: str,
+    patient_ref: str | None = None,
+    visit_ref: str | None = None,
     language: str,
     trigger: str,
     follow_up_answers: list[dict[str, Any]] | None,
@@ -90,6 +92,8 @@ def new_run_with_answers(
         "status": "created",
         "input": {
             "case_ref": case_ref,
+            **({"patient_ref": patient_ref} if patient_ref else {}),
+            **({"visit_ref": visit_ref} if visit_ref else {}),
             "language": language,
             "trigger": trigger,
             **({"follow_up_answers": follow_up_answers} if follow_up_answers else {}),
@@ -108,18 +112,67 @@ async def run_pipeline(run_id: str) -> None:
     if not run:
         return
 
-    # Load synthetic case bundle (Kaggle demo). Never persist raw OCR text in DB/events.
-    try:
-        bundle = load_case_bundle(run["input"]["case_ref"])
-    except Exception:
-        db.update_run(run_id, status="failed_safe", policy_violations=[])
-        emit_event(
-            run_id,
-            "finalized",
-            {"message": "Run failed: unknown case_ref (synthetic demo).", "ts": _now_iso()},
-        )
-        _RUN_QUEUES.pop(run_id, None)
-        return
+    prefilled_intake_extracted: dict[str, Any] | None = None
+
+    visit_ref = run.get("input", {}).get("visit_ref")
+    if isinstance(visit_ref, str) and visit_ref.strip():
+        # Resolve run from synthetic pharmacy dataset (no OCR/prompt text persisted).
+        visit = db.get_visit(visit_ref.strip())
+        if not visit:
+            db.update_run(run_id, status="failed_safe", policy_violations=[])
+            emit_event(
+                run_id,
+                "finalized",
+                {"message": "Run failed_safe (unknown visit_ref).", "ts": _now_iso()},
+            )
+            _RUN_QUEUES.pop(run_id, None)
+            return
+
+        patient_ref = run.get("input", {}).get("patient_ref") or visit.get("patient_ref")
+        if not isinstance(patient_ref, str) or not patient_ref.strip():
+            db.update_run(run_id, status="failed_safe", policy_violations=[])
+            emit_event(
+                run_id,
+                "finalized",
+                {"message": "Run failed_safe (missing patient_ref).", "ts": _now_iso()},
+            )
+            _RUN_QUEUES.pop(run_id, None)
+            return
+
+        patient = db.get_patient(patient_ref.strip())
+        if not patient:
+            db.update_run(run_id, status="failed_safe", policy_violations=[])
+            emit_event(
+                run_id,
+                "finalized",
+                {"message": "Run failed_safe (unknown patient_ref).", "ts": _now_iso()},
+            )
+            _RUN_QUEUES.pop(run_id, None)
+            return
+
+        bundle = {
+            "llm_context": patient.get("llm_context") or {},
+            "products": db.list_inventory(),
+        }
+        maybe_intake = visit.get("intake_extracted")
+        if isinstance(maybe_intake, dict):
+            prefilled_intake_extracted = maybe_intake
+    else:
+        # Load synthetic case bundle (Kaggle demo). Never persist raw OCR text in DB/events.
+        try:
+            bundle = load_case_bundle(run["input"]["case_ref"])
+        except Exception:
+            db.update_run(run_id, status="failed_safe", policy_violations=[])
+            emit_event(
+                run_id,
+                "finalized",
+                {
+                    "message": "Run failed_safe: unknown case_ref (synthetic demo).",
+                    "ts": _now_iso(),
+                },
+            )
+            _RUN_QUEUES.pop(run_id, None)
+            return
 
     language = run["input"]["language"]
     ocr_text = (bundle.get("intake_text_ocr") or {}).get(language) or ""
@@ -186,6 +239,22 @@ async def run_pipeline(run_id: str) -> None:
             await asyncio.sleep(0.1)
 
         elif step == "A1_intake_extraction":
+            if isinstance(prefilled_intake_extracted, dict):
+                # Visit-based runs provide a pre-extracted structured intake (no OCR text).
+                intake_extracted = dict(prefilled_intake_extracted)
+                artifacts["intake_extracted"] = intake_extracted
+                emit_event(
+                    run_id,
+                    "tool_result",
+                    {
+                        "step": step,
+                        "tool_name": "intake_source",
+                        "result_summary": "prefilled intake_extracted from visit_ref",
+                    },
+                )
+                await asyncio.sleep(0.05)
+                continue
+
             try:
                 intake_extracted = extract_intake(str(ocr_text), language)
             except PhiBoundaryError as e:

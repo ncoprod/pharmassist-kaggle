@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from pharmassist_api import db
 from pharmassist_api.contracts.validate_schema import validate_instance
 from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run_with_answers, run_pipeline
+from pharmassist_api.pharmacy import ensure_pharmacy_dataset_loaded
 from pharmassist_api.privacy.phi_boundary import scan_text
 from pharmassist_api.validators.phi_scanner import scan_for_phi
 
@@ -23,6 +24,8 @@ class FollowUpAnswer(BaseModel):
 
 class RunCreateRequest(BaseModel):
     case_ref: str = "case_000042"
+    patient_ref: str | None = None
+    visit_ref: str | None = None
     language: Literal["fr", "en"] = "fr"
     trigger: Literal["manual", "import", "ocr_upload", "scheduled_refresh"] = "manual"
     follow_up_answers: list[FollowUpAnswer] | None = None
@@ -31,6 +34,12 @@ class RunCreateRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.init_db()
+    # Idempotent: loads a tiny committed subset unless PHARMASSIST_PHARMACY_DATA_DIR is set.
+    try:
+        ensure_pharmacy_dataset_loaded()
+    except Exception:
+        # Keep the Kaggle demo resilient: case_ref-based runs still work even if dataset is missing.
+        pass
     yield
 
 
@@ -92,8 +101,14 @@ async def create_run(req: RunCreateRequest) -> dict[str, Any]:
                     ],
                 },
             )
+    case_ref = req.case_ref
+    if isinstance(req.visit_ref, str) and req.visit_ref.strip():
+        case_ref = f"visit:{req.visit_ref.strip()}"
+
     run = new_run_with_answers(
-        case_ref=req.case_ref,
+        case_ref=case_ref,
+        patient_ref=req.patient_ref.strip() if isinstance(req.patient_ref, str) else None,
+        visit_ref=req.visit_ref.strip() if isinstance(req.visit_ref, str) else None,
         language=req.language,
         trigger=req.trigger,
         follow_up_answers=follow_up_answers,
@@ -106,6 +121,33 @@ async def create_run(req: RunCreateRequest) -> dict[str, Any]:
     asyncio.create_task(run_pipeline(run["run_id"]))
 
     return run
+
+
+@app.get("/patients")
+def search_patients(query: str = Query(default="", min_length=0, max_length=64)) -> dict[str, Any]:
+    q = query.strip()
+    if not q:
+        return {"patients": []}
+    return {"patients": db.search_patients(query_prefix=q, limit=20)}
+
+
+@app.get("/patients/{patient_ref}")
+def get_patient(patient_ref: str) -> dict[str, Any]:
+    patient = db.get_patient(patient_ref)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return patient
+
+
+@app.get("/patients/{patient_ref}/visits")
+def get_patient_visits(patient_ref: str) -> dict[str, Any]:
+    patient = db.get_patient(patient_ref)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {
+        "patient_ref": patient_ref,
+        "visits": db.list_patient_visits(patient_ref=patient_ref, limit=50),
+    }
 
 
 @app.get("/runs/{run_id}")

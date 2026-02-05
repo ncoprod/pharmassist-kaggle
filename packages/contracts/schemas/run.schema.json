@@ -35,6 +35,12 @@
         "case_ref": {
           "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
         },
+        "patient_ref": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        },
+        "visit_ref": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        },
         "language": {
           "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/language_code"
         },
