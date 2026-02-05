@@ -5,6 +5,7 @@ import os
 from typing import Any, Literal
 
 from pharmassist_api.models.medgemma_client import medgemma_generate_text
+from pharmassist_api.privacy.phi_boundary import scan_text
 
 SCHEMA_VERSION = "0.0.0"
 
@@ -133,6 +134,13 @@ def maybe_select_followup_question_ids(
         + "\n"
     )
 
+    # Defense in depth: never send identifier-like content to any model.
+    violations = scan_text(user_content, json_path="$.a3_followup_selector.user_content")
+    blockers = [v for v in violations if v.severity == "BLOCKER"]
+    if blockers:
+        audit["mode"] = "fallback"
+        return None, audit
+
     out = medgemma_generate_text(
         user_content=user_content,
         system=(
@@ -172,4 +180,3 @@ def maybe_select_followup_question_ids(
 
     audit["selected_ids"] = list(selected)
     return selected, audit
-
