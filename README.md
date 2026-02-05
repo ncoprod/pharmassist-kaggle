@@ -11,11 +11,30 @@ What this repo demonstrates:
 - **Safe LLM routing**: optional MedGemma follow-up selection that can only choose from a closed
   `question_id` allowlist (no free-form question generation).
 - **No real patient data**: synthetic cases only.
+- **Near‑MVP realism**: synthetic **patients + visits** and a “Start run from visit” flow.
 
 Repo layout:
 - `packages/contracts/`: canonical JSON Schemas + examples
 - `apps/api/`: FastAPI orchestrator + pipeline steps
+- `apps/api/src/pharmassist_api/pharmacy/`: synthetic pharmacy dataset loader + `/patients` endpoints
 - `apps/web/`: Vite UI (start run + SSE progress)
+
+## Patients + Visits (synthetic pharmacy-year)
+
+On startup, the API seeds SQLite with a **tiny committed subset**:
+- `apps/api/src/pharmassist_api/pharmacy/fixtures/paris15_mini/*.jsonl.gz`
+
+Endpoints:
+- `GET /patients?query=pt_0000`
+- `GET /patients/{patient_ref}`
+- `GET /patients/{patient_ref}/visits`
+
+Run creation:
+- `POST /runs` accepts `visit_ref` (+ optional `patient_ref`) and resolves a case bundle from the dataset
+  **without any PHI** (no OCR/PDF text stored).
+
+To use a larger dataset, download it locally and point:
+- `PHARMASSIST_PHARMACY_DATA_DIR=/path/to/dataset_dir` (must contain `patients.jsonl.gz`, `visits.jsonl.gz`, `events.jsonl.gz`, `inventory.jsonl.gz`)
 
 ## Local Dev (no model download)
 
