@@ -32,3 +32,22 @@ def test_phi_boundary_blocks_label_like_nom_colon():
     with pytest.raises(PhiBoundaryError):
         raise_if_phi("Nom: Martin", "$.intake_text_ocr")
 
+
+def test_phi_boundary_blocks_label_like_date_de_naissance_colon():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("Date de naissance: 2001-01-02", "$.intake_text_ocr")
+
+
+def test_phi_boundary_blocks_label_like_name_colon():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("Name: John", "$.intake_text_ocr")
+
+
+def test_phi_boundary_blocks_label_like_address_colon():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("Address: 10 Downing Street", "$.intake_text_ocr")
+
+
+def test_phi_boundary_blocks_label_like_dob_colon():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("DOB: 01/02/2003", "$.intake_text_ocr")

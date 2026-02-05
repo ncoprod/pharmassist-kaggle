@@ -17,7 +17,14 @@ class PhiBoundaryError(Exception):
 # Heuristic markers: treat "field labels" as suspicious in untrusted text.
 # We keep this conservative to avoid false positives (only triggers on "label:").
 _PHI_LABEL_RE = re.compile(
-    r"\b(nom|pr[eé]nom|adresse|email|mail|t[eé]l[eé]phone|telephone|nir|ssn)\s*:",
+    r"\b("
+    r"nom|pr[eé]nom|adresse|email|mail|t[eé]l[eé]phone|telephone|"
+    r"date\s*de\s*naissance|"
+    r"nir|ssn|"
+    r"name|first[-\s]*name|last[-\s]*name|surname|full[-\s]*name|"
+    r"address|phone|mobile|"
+    r"dob|date[-\s]*of[-\s]*birth|birth[-\s]*date"
+    r")\s*:",
     flags=re.IGNORECASE,
 )
 
