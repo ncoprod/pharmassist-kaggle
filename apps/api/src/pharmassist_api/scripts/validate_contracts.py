@@ -3,8 +3,7 @@ from __future__ import annotations
 import json
 import sys
 
-from pharmassist_api.contracts.load_schema import examples_dir
-from pharmassist_api.contracts.load_schema import repo_root, schemas_dir
+from pharmassist_api.contracts.load_schema import examples_dir, repo_root, schemas_dir
 from pharmassist_api.contracts.validate_schema import validate_or_return_errors
 from pharmassist_api.validators.policy_validate import validate_payload
 

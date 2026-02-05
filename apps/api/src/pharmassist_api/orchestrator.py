@@ -11,8 +11,7 @@ from . import db
 from .cases.load_case import load_case_bundle
 from .contracts.validate_schema import validate_instance
 from .follow_up_answers import validate_and_canonicalize_follow_up_answers
-from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi
-from .privacy.phi_boundary import scan_text
+from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi, scan_text
 from .steps.a1_intake_extraction import extract_intake
 from .steps.a3_triage import triage_and_followup
 from .steps.a4_evidence_retrieval import retrieve_evidence
@@ -105,7 +104,9 @@ def new_run_with_answers(
         canonical, issues = validate_and_canonicalize_follow_up_answers(follow_up_answers)
         if issues:
             first = issues[0]
-            raise ValueError(f"Invalid follow_up_answers at {first.get('json_path')}: {first.get('message')}")
+            raise ValueError(
+                f"Invalid follow_up_answers at {first.get('json_path')}: {first.get('message')}"
+            )
         follow_up_answers = canonical
 
     run = {

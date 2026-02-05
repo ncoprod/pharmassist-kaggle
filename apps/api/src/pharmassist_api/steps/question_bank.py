@@ -25,7 +25,11 @@ def load_question_bank() -> dict[str, dict[str, Any]]:
     issues = validate_or_return_errors(data, "question_bank")
     if issues:
         first = issues[0]
-        raise ValueError(f"question_bank.json failed schema validation at {first.json_path}: {first.message}")
+        msg = (
+            "question_bank.json failed schema validation at "
+            f"{first.json_path}: {first.message}"
+        )
+        raise ValueError(msg)
 
     bank = data.get("bank")
     if not isinstance(bank, dict):

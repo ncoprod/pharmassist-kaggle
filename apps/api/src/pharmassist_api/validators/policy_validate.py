@@ -78,7 +78,10 @@ def validate_payload(payload: Any, *, schema_name: str) -> list[Violation]:
                     reason = escalation.get("reason")
                     if isinstance(reason, str):
                         violations.extend(
-                            lint_rx_advice(reason, path="$.artifacts.recommendation.escalation.reason")
+                            lint_rx_advice(
+                                reason,
+                                path="$.artifacts.recommendation.escalation.reason",
+                            )
                         )
 
     return violations
