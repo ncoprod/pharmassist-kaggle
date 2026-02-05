@@ -269,7 +269,9 @@ def _generate_follow_up_questions(
     # Optional MedGemma selector: choose a subset (closed allowlist).
     selected_ids: list[str] | None = None
     selector_meta: dict[str, Any] = {"attempted": False, "mode": "rules", "max_k": max_k}
-    if optional_ids and len(required_ids) < max_k:
+    # Only surface follow-up questions when we *actually* need more info.
+    # If `required_ids` is empty, the run should proceed without asking extra questions.
+    if needs_more_info and optional_ids and len(required_ids) < max_k:
         selected_ids, selector_meta = maybe_select_followup_question_ids(
             intake_extracted=intake_extracted,
             llm_context=llm_context,

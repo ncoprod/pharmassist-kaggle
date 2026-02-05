@@ -28,6 +28,37 @@ def test_triage_allergy_case_is_non_blocking_by_default():
     assert reco["follow_up_questions"] == []
 
 
+def test_followup_selector_is_not_attempted_when_no_followup_required(monkeypatch):
+    # Even if the MedGemma follow-up selector is enabled, we must not attempt
+    # to select questions when the rules-first triage does not require follow-up.
+    monkeypatch.setenv("PHARMASSIST_USE_MEDGEMMA_FOLLOWUP", "1")
+
+    intake = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "Sneezing and itchy eyes for one week",
+        "symptoms": [
+            {"label": "sneezing", "severity": "moderate", "duration_days": 7},
+            {"label": "itchy eyes", "severity": "mild", "duration_days": 7},
+        ],
+        "red_flags": [],
+    }
+    llm_context = {"demographics": {"age_years": 21, "sex": "F"}, "schema_version": "0.0.0"}
+
+    _updated, reco, needs_more_info, meta = triage_and_followup(
+        intake_extracted=intake,
+        llm_context=llm_context,
+        follow_up_answers=None,
+        language="en",
+    )
+
+    assert needs_more_info is False
+    assert reco["follow_up_questions"] == []
+
+    sel = meta.get("followup_selector") if isinstance(meta, dict) else None
+    assert isinstance(sel, dict)
+    assert sel.get("attempted") is False
+
+
 def test_triage_escalates_on_red_flags():
     intake = {
         "schema_version": "0.0.0",
