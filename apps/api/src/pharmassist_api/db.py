@@ -23,7 +23,9 @@ def db_path() -> Path:
 def _connect() -> sqlite3.Connection:
     path = db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False)
+    # sqlite3.connect accepts PathLike, but convert explicitly to str to avoid
+    # platform-specific edge cases (observed flakiness on some temp paths).
+    conn = sqlite3.connect(str(path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")
