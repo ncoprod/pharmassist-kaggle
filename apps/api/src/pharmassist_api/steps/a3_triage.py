@@ -39,6 +39,10 @@ def triage_and_followup(
 
     # Red flags can come from extracted text OR explicit follow-up answers.
     red_flags = _detect_red_flags(text_blob, answers)
+    if _is_low_info(intake_extracted):
+        overall_sev = _norm(answers.get("q_overall_severity") or "")
+        if overall_sev == "severe":
+            red_flags.add("RF_SEVERE_SYMPTOMS")
     intake_extracted = dict(intake_extracted)
     intake_extracted["red_flags"] = sorted(red_flags)
 
@@ -263,14 +267,17 @@ def _generate_follow_up_questions(
     )
 
     # Optional MedGemma selector: choose a subset (closed allowlist).
-    selected_ids, selector_meta = maybe_select_followup_question_ids(
-        intake_extracted=intake_extracted,
-        llm_context=llm_context,
-        candidate_ids=candidate_ids,
-        question_bank=bank,
-        language=language,
-        max_k=max_k,
-    )
+    selected_ids: list[str] | None = None
+    selector_meta: dict[str, Any] = {"attempted": False, "mode": "rules", "max_k": max_k}
+    if optional_ids and len(required_ids) < max_k:
+        selected_ids, selector_meta = maybe_select_followup_question_ids(
+            intake_extracted=intake_extracted,
+            llm_context=llm_context,
+            candidate_ids=candidate_ids,
+            question_bank=bank,
+            language=language,
+            max_k=max_k,
+        )
 
     # Safety property: required questions are never dropped by the model.
     required_sorted = sorted(

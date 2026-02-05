@@ -123,7 +123,6 @@ def maybe_select_followup_question_ids(
         f"Max ids: {max_k}\n"
         "Do NOT invent new ids.\n"
         "\n"
-        f"Presenting problem: {intake_extracted.get('presenting_problem','')}\n"
         f"Symptoms: {', '.join(symptoms)}\n"
         f"Demographics: age_years={age} sex={sex}\n"
         f"Allergies: {', '.join(allergies)}\n"
