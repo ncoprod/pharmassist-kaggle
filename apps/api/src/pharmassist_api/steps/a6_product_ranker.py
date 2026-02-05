@@ -26,7 +26,9 @@ def rank_products(
     pregnancy_status = _pregnancy_status(llm_context, answers)
 
     allergy_terms = _allergy_terms(llm_context)
-    target_category = _infer_target_category(intake_extracted)
+    target_category = _infer_target_category(
+        intake_extracted, primary_domain=answers.get("q_primary_domain")
+    )
 
     ranked: list[tuple[int, dict[str, Any], str]] = []
     warnings: list[dict[str, Any]] = []
@@ -184,7 +186,19 @@ def _matches_allergy(product: dict[str, Any], allergy_terms: set[str]) -> bool:
     return any(t in haystack for t in allergy_terms)
 
 
-def _infer_target_category(intake_extracted: dict[str, Any]) -> str:
+def _infer_target_category(
+    intake_extracted: dict[str, Any], *, primary_domain: str | None = None
+) -> str:
+    if isinstance(primary_domain, str) and primary_domain:
+        mapping = {
+            "allergy_ent": "allergy",
+            "digestive": "digestion",
+            "skin": "dermatology",
+        }
+        mapped = mapping.get(primary_domain)
+        if mapped:
+            return mapped
+
     labels: list[str] = []
     for s in intake_extracted.get("symptoms") or []:
         if isinstance(s, dict) and isinstance(s.get("label"), str):

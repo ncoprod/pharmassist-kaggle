@@ -97,13 +97,21 @@ def test_triage_low_info_blocks_until_min_questions_answered():
     validate_instance(reco, "recommendation")
     assert needs_more_info is True
     qids = {q["question_id"] for q in reco["follow_up_questions"]}
-    assert {"q_duration", "q_fever", "q_breathing"} <= qids
+    assert {
+        "q_primary_domain",
+        "q_overall_severity",
+        "q_fever",
+        "q_breathing",
+        "q_chest_pain",
+    } <= qids
 
     # Once answered, the run should proceed.
     answers = [
-        {"question_id": "q_duration", "answer": "7"},
+        {"question_id": "q_primary_domain", "answer": "digestive"},
+        {"question_id": "q_overall_severity", "answer": "mild"},
         {"question_id": "q_fever", "answer": "no"},
         {"question_id": "q_breathing", "answer": "no"},
+        {"question_id": "q_chest_pain", "answer": "no"},
     ]
     updated2, reco2, needs_more_info2, _meta2 = triage_and_followup(
         intake_extracted=intake,
@@ -137,7 +145,38 @@ def test_triage_low_info_detects_ocr_spaced_unspecified_label():
     validate_instance(reco, "recommendation")
     assert needs_more_info is True
     qids = {q["question_id"] for q in reco["follow_up_questions"]}
-    assert {"q_duration", "q_fever", "q_breathing"} <= qids
+    assert {
+        "q_primary_domain",
+        "q_overall_severity",
+        "q_fever",
+        "q_breathing",
+        "q_chest_pain",
+    } <= qids
+
+
+def test_triage_low_info_questions_render_in_fr_and_en():
+    intake = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "unspecified",
+        "symptoms": [{"label": "unspecified symptom", "severity": "unknown"}],
+        "red_flags": [],
+    }
+    llm_context = {"demographics": {"age_years": 34, "sex": "F"}, "schema_version": "0.0.0"}
+
+    for language in ("fr", "en"):
+        _updated, reco, needs_more_info, _meta = triage_and_followup(
+            intake_extracted=intake,
+            llm_context=llm_context,
+            follow_up_answers=None,
+            language=language,
+        )
+        assert needs_more_info is True
+        qs = {q["question_id"]: q for q in reco["follow_up_questions"]}
+        assert "q_primary_domain" in qs
+        assert qs["q_primary_domain"].get("answer_type") == "choice"
+        assert isinstance(qs["q_primary_domain"].get("choices"), list)
+        assert "q_breathing" in qs
+        assert "q_fever" in qs
 
 
 def test_high_fever_temperature_triggers_red_flag():

@@ -1,12 +1,49 @@
 {
   "schema_version": "0.0.0",
   "bank": {
+    "q_primary_domain": {
+      "priority": 1,
+      "answer_type": "choice",
+      "choices": [
+        "allergy_ent",
+        "digestive",
+        "skin",
+        "pain",
+        "eye",
+        "urology",
+        "respiratory",
+        "other"
+      ],
+      "tags": ["general", "routing", "low_info"],
+      "question": {
+        "fr": "Quel est le domaine principal du probleme ?",
+        "en": "What is the main symptom domain?"
+      },
+      "reason": {
+        "fr": "Choisir un domaine permet de poser les bonnes questions sans texte libre.",
+        "en": "Choosing a domain helps route to the right questions without free text."
+      }
+    },
+    "q_overall_severity": {
+      "priority": 2,
+      "answer_type": "choice",
+      "choices": ["mild", "moderate", "severe"],
+      "tags": ["general", "severity"],
+      "question": {
+        "fr": "Globalement, c'est plutot leger, modere ou severe ?",
+        "en": "Overall, is it mild, moderate, or severe?"
+      },
+      "reason": {
+        "fr": "La gravite oriente les signes d'alerte et la conduite a tenir.",
+        "en": "Severity helps assess red flags and next steps."
+      }
+    },
     "q_duration": {
       "priority": 1,
       "answer_type": "number",
       "tags": ["general", "timeline"],
       "question": {
-        "fr": "Depuis combien de jours ?",
+        "fr": "Depuis combien de jours avez-vous ces symptomes ?",
         "en": "How many days have you had these symptoms?"
       },
       "reason": {
@@ -66,6 +103,32 @@
         "en": "Chest pain is a red flag."
       }
     },
+    "q_severe_allergic_reaction": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["red_flag", "allergy"],
+      "question": {
+        "fr": "Gonflement des levres/visage/langue ou malaise allergique important ?",
+        "en": "Swelling of lips/face/tongue or severe allergic reaction?"
+      },
+      "reason": {
+        "fr": "Ces signes peuvent indiquer une reaction allergique grave (urgence).",
+        "en": "These signs may indicate a severe allergic reaction (emergency)."
+      }
+    },
+    "q_confusion_or_fainting": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["red_flag", "neuro"],
+      "question": {
+        "fr": "Confusion, malaise ou perte de connaissance ?",
+        "en": "Confusion, fainting, or loss of consciousness?"
+      },
+      "reason": {
+        "fr": "Ces signes peuvent necessiter une evaluation urgente.",
+        "en": "These symptoms may require urgent evaluation."
+      }
+    },
     "q_pregnancy": {
       "priority": 3,
       "answer_type": "yes_no",
@@ -77,6 +140,32 @@
       "reason": {
         "fr": "Certains produits necessitent des precautions en cas de grossesse.",
         "en": "Some products require caution in pregnancy."
+      }
+    },
+    "q_breastfeeding": {
+      "priority": 4,
+      "answer_type": "yes_no",
+      "tags": ["safety", "breastfeeding"],
+      "question": {
+        "fr": "Allaitez-vous actuellement ?",
+        "en": "Are you currently breastfeeding?"
+      },
+      "reason": {
+        "fr": "Certains produits necessitent des precautions pendant l'allaitement.",
+        "en": "Some products require caution while breastfeeding."
+      }
+    },
+    "q_immunocompromised": {
+      "priority": 4,
+      "answer_type": "yes_no",
+      "tags": ["safety", "infection_screen"],
+      "question": {
+        "fr": "Immunodepression connue (ex: chimio, greffe, corticoides au long cours) ?",
+        "en": "Known immunosuppression (e.g., chemo, transplant, long-term steroids)?"
+      },
+      "reason": {
+        "fr": "Le risque d'infection severe peut etre plus eleve.",
+        "en": "Risk of severe infection may be higher."
       }
     },
     "q_allergy_severity": {
@@ -91,6 +180,589 @@
       "reason": {
         "fr": "L'intensite oriente le conseil et les signes d'alerte.",
         "en": "Severity helps guide advice and red-flag assessment."
+      }
+    },
+
+    "q_allergy_known_trigger": {
+      "priority": 6,
+      "answer_type": "choice",
+      "choices": ["pollen", "dust_mites", "pets", "food", "other", "unknown"],
+      "tags": ["allergy", "routing"],
+      "question": {
+        "fr": "Le declencheur est-il connu ?",
+        "en": "Is there a known trigger?"
+      },
+      "reason": {
+        "fr": "Identifier le declencheur aide a orienter les mesures d'eviction.",
+        "en": "Identifying a trigger helps guide avoidance measures."
+      }
+    },
+    "q_allergy_wheezing_or_asthma": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["allergy", "respiratory", "red_flag"],
+      "question": {
+        "fr": "Sifflements, asthme ou aggravation respiratoire associee ?",
+        "en": "Wheezing, asthma, or worsening breathing symptoms?"
+      },
+      "reason": {
+        "fr": "Une atteinte respiratoire associee peut necessiter une evaluation medicale.",
+        "en": "Associated breathing involvement may need medical evaluation."
+      }
+    },
+    "q_allergy_eye_symptoms": {
+      "priority": 7,
+      "answer_type": "yes_no",
+      "tags": ["allergy", "eye"],
+      "question": {
+        "fr": "Yeux rouges/qui grattent/larmoiement ?",
+        "en": "Itchy/red/watery eyes?"
+      },
+      "reason": {
+        "fr": "Aide a distinguer une rhinite allergique d'autres causes.",
+        "en": "Helps distinguish allergic rhinitis from other causes."
+      }
+    },
+    "q_allergy_nasal_congestion": {
+      "priority": 7,
+      "answer_type": "yes_no",
+      "tags": ["allergy", "ent"],
+      "question": {
+        "fr": "Nez bouche ou ecoulement nasal important ?",
+        "en": "Significant nasal congestion or runny nose?"
+      },
+      "reason": {
+        "fr": "Oriente vers une prise en charge ORL/allergie.",
+        "en": "Helps route ENT/allergy management."
+      }
+    },
+
+    "q_resp_cough": {
+      "priority": 5,
+      "answer_type": "yes_no",
+      "tags": ["respiratory"],
+      "question": {
+        "fr": "Avez-vous de la toux ?",
+        "en": "Do you have a cough?"
+      },
+      "reason": {
+        "fr": "La toux oriente la prise en charge respiratoire (rhume, bronchite, etc.).",
+        "en": "Cough helps route respiratory assessment (cold, bronchitis, etc.)."
+      }
+    },
+    "q_resp_wheezing": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["respiratory", "red_flag"],
+      "question": {
+        "fr": "Sifflements a la respiration ?",
+        "en": "Wheezing?"
+      },
+      "reason": {
+        "fr": "Les sifflements peuvent indiquer une crise d'asthme ou une obstruction.",
+        "en": "Wheezing may indicate asthma flare or obstruction."
+      }
+    },
+    "q_resp_sore_throat": {
+      "priority": 6,
+      "answer_type": "yes_no",
+      "tags": ["respiratory", "ent"],
+      "question": {
+        "fr": "Mal de gorge ?",
+        "en": "Sore throat?"
+      },
+      "reason": {
+        "fr": "Aide a differencier rhinite, pharyngite, et autres causes.",
+        "en": "Helps differentiate rhinitis, pharyngitis, and other causes."
+      }
+    },
+    "q_resp_runny_nose": {
+      "priority": 7,
+      "answer_type": "yes_no",
+      "tags": ["respiratory", "ent"],
+      "question": {
+        "fr": "Nez qui coule ?",
+        "en": "Runny nose?"
+      },
+      "reason": {
+        "fr": "Utile pour orienter vers rhume/allergie.",
+        "en": "Useful to route toward cold vs allergy."
+      }
+    },
+    "q_resp_cyanosis": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["respiratory", "red_flag"],
+      "question": {
+        "fr": "Levres/visage bleutes ou difficulte a parler ?",
+        "en": "Bluish lips/face or difficulty speaking?"
+      },
+      "reason": {
+        "fr": "Signe de gravite respiratoire (urgence).",
+        "en": "Sign of severe breathing compromise (emergency)."
+      }
+    },
+    "q_resp_asthma_copd": {
+      "priority": 5,
+      "answer_type": "yes_no",
+      "tags": ["respiratory", "risk_factor"],
+      "question": {
+        "fr": "Asthme/BPCO connu(e) ?",
+        "en": "Known asthma/COPD?"
+      },
+      "reason": {
+        "fr": "Les antecedents respiratoires augmentent le risque de complications.",
+        "en": "Respiratory history increases risk of complications."
+      }
+    },
+    "q_resp_sputum_color": {
+      "priority": 8,
+      "answer_type": "choice",
+      "choices": ["none", "clear", "yellow_green", "blood"],
+      "tags": ["respiratory", "infection_screen"],
+      "question": {
+        "fr": "Les crachats sont-ils clairs, jaunes/verts, ou sanglants ?",
+        "en": "If you cough up mucus, is it clear, yellow/green, or bloody?"
+      },
+      "reason": {
+        "fr": "La presence de sang est un signe d'alerte; la couleur peut orienter.",
+        "en": "Blood is a red flag; color can help orient assessment."
+      }
+    },
+
+    "q_gi_main_symptom": {
+      "priority": 5,
+      "answer_type": "choice",
+      "choices": [
+        "abdominal_pain",
+        "diarrhea",
+        "vomiting",
+        "nausea",
+        "heartburn",
+        "constipation",
+        "bloating",
+        "other"
+      ],
+      "tags": ["digestive", "routing"],
+      "question": {
+        "fr": "Quel est le symptome digestif principal ?",
+        "en": "What is the main digestive symptom?"
+      },
+      "reason": {
+        "fr": "Aide a orienter vers la bonne prise en charge OTC.",
+        "en": "Helps route to the right OTC approach."
+      }
+    },
+    "q_gi_abdominal_pain_severe": {
+      "priority": 2,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "red_flag", "pain"],
+      "question": {
+        "fr": "Douleur abdominale severe ou qui augmente rapidement ?",
+        "en": "Severe abdominal pain or rapidly worsening pain?"
+      },
+      "reason": {
+        "fr": "Peut indiquer une cause necessitant une evaluation medicale rapide.",
+        "en": "May indicate a condition needing prompt medical evaluation."
+      }
+    },
+    "q_gi_right_lower_pain": {
+      "priority": 2,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "red_flag", "pain"],
+      "question": {
+        "fr": "Douleur localisee en bas a droite du ventre ?",
+        "en": "Pain localized in the lower right abdomen?"
+      },
+      "reason": {
+        "fr": "Peut correspondre a une situation necessitant un avis medical.",
+        "en": "May indicate a condition requiring medical assessment."
+      }
+    },
+    "q_gi_blood_in_stool": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "red_flag"],
+      "question": {
+        "fr": "Sang dans les selles ?",
+        "en": "Blood in the stool?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte digestif (consultation recommande).",
+        "en": "Digestive red flag (medical evaluation recommended)."
+      }
+    },
+    "q_gi_black_stool": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "red_flag"],
+      "question": {
+        "fr": "Selles noires (type goudron) ?",
+        "en": "Black, tarry stool?"
+      },
+      "reason": {
+        "fr": "Peut indiquer un saignement digestif (urgence).",
+        "en": "May indicate GI bleeding (urgent)."
+      }
+    },
+    "q_gi_vomiting": {
+      "priority": 5,
+      "answer_type": "yes_no",
+      "tags": ["digestive"],
+      "question": {
+        "fr": "Vomissements ?",
+        "en": "Vomiting?"
+      },
+      "reason": {
+        "fr": "Oriente les conseils (hydratation, surveillance, etc.).",
+        "en": "Guides advice (hydration, monitoring, etc.)."
+      }
+    },
+    "q_gi_vomiting_blood": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "red_flag"],
+      "question": {
+        "fr": "Sang dans les vomissements ?",
+        "en": "Blood in vomit?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte (evaluation urgente).",
+        "en": "Red flag (urgent evaluation)."
+      }
+    },
+    "q_gi_dehydration_signs": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "red_flag"],
+      "question": {
+        "fr": "Signes de deshydratation (bouche seche, vertiges, peu d'urines) ?",
+        "en": "Signs of dehydration (dry mouth, dizziness, low urine output)?"
+      },
+      "reason": {
+        "fr": "La deshydratation est un facteur de gravite, surtout chez l'enfant/senior.",
+        "en": "Dehydration increases risk, especially in children/older adults."
+      }
+    },
+    "q_gi_diarrhea_frequency": {
+      "priority": 7,
+      "answer_type": "choice",
+      "choices": ["lt_3_per_day", "3_6_per_day", "gt_6_per_day"],
+      "tags": ["digestive", "timeline"],
+      "question": {
+        "fr": "Si diarhee: frequence approximative par jour ?",
+        "en": "If diarrhea: approximate frequency per day?"
+      },
+      "reason": {
+        "fr": "La frequence aide a evaluer le risque de deshydratation.",
+        "en": "Frequency helps assess dehydration risk."
+      }
+    },
+    "q_gi_recent_travel": {
+      "priority": 9,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "infection_screen"],
+      "question": {
+        "fr": "Voyage recent ?",
+        "en": "Recent travel?"
+      },
+      "reason": {
+        "fr": "Certaines causes infectieuses sont plus probables apres un voyage.",
+        "en": "Some infectious causes are more likely after travel."
+      }
+    },
+    "q_gi_recent_antibiotics": {
+      "priority": 9,
+      "answer_type": "yes_no",
+      "tags": ["digestive", "risk_factor"],
+      "question": {
+        "fr": "Antibiotiques recents (moins de 2 mois) ?",
+        "en": "Recent antibiotics (within 2 months)?"
+      },
+      "reason": {
+        "fr": "Peut orienter vers certaines causes de diarhee.",
+        "en": "May point toward specific diarrhea causes."
+      }
+    },
+
+    "q_skin_main_problem": {
+      "priority": 5,
+      "answer_type": "choice",
+      "choices": ["rash", "itching", "eczema_flare", "insect_bite", "burn", "wound", "other"],
+      "tags": ["skin", "routing"],
+      "question": {
+        "fr": "Quel est le probleme de peau principal ?",
+        "en": "What is the main skin problem?"
+      },
+      "reason": {
+        "fr": "Aide a orienter vers le bon conseil OTC/para.",
+        "en": "Helps route to the right OTC/parapharma advice."
+      }
+    },
+    "q_skin_spreading_fast": {
+      "priority": 2,
+      "answer_type": "yes_no",
+      "tags": ["skin", "red_flag"],
+      "question": {
+        "fr": "La lesion s'etend rapidement ?",
+        "en": "Is it spreading quickly?"
+      },
+      "reason": {
+        "fr": "Une extension rapide peut indiquer une infection ou une reaction severe.",
+        "en": "Rapid spread may indicate infection or a severe reaction."
+      }
+    },
+    "q_skin_mucosa_blisters": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["skin", "red_flag"],
+      "question": {
+        "fr": "Atteinte des muqueuses ou cloques etendues ?",
+        "en": "Mucosal involvement or widespread blisters?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte dermatologique (avis medical urgent).",
+        "en": "Dermatologic red flag (urgent medical evaluation)."
+      }
+    },
+    "q_skin_pus_or_warmth": {
+      "priority": 4,
+      "answer_type": "yes_no",
+      "tags": ["skin", "infection_screen"],
+      "question": {
+        "fr": "Pus, chaleur locale ou douleur importante au toucher ?",
+        "en": "Pus, warmth, or significant tenderness?"
+      },
+      "reason": {
+        "fr": "Peut orienter vers une infection cutanee.",
+        "en": "May indicate skin infection."
+      }
+    },
+    "q_skin_tick_bite": {
+      "priority": 9,
+      "answer_type": "yes_no",
+      "tags": ["skin", "infection_screen"],
+      "question": {
+        "fr": "Piqure de tique recente ?",
+        "en": "Recent tick bite?"
+      },
+      "reason": {
+        "fr": "Certaines eruptions apres tique necessitent un avis medical.",
+        "en": "Some rashes after tick exposure require medical advice."
+      }
+    },
+    "q_skin_new_drug_recent": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["skin", "red_flag", "medication"],
+      "question": {
+        "fr": "Nouveau medicament recemment (ou changement de dose) ?",
+        "en": "New medication recently (or dose change)?"
+      },
+      "reason": {
+        "fr": "Une eruption apres medicament peut necessiter un avis medical.",
+        "en": "A drug-related rash may require medical evaluation."
+      }
+    },
+
+    "q_pain_location": {
+      "priority": 5,
+      "answer_type": "choice",
+      "choices": ["head", "throat", "ear", "tooth", "muscle_joint", "back", "menstrual", "other"],
+      "tags": ["pain", "routing"],
+      "question": {
+        "fr": "Ou se situe principalement la douleur ?",
+        "en": "Where is the pain mainly located?"
+      },
+      "reason": {
+        "fr": "La localisation aide a orienter les causes possibles et le conseil.",
+        "en": "Location helps orient likely causes and advice."
+      }
+    },
+    "q_pain_after_trauma": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["pain", "red_flag", "injury"],
+      "question": {
+        "fr": "La douleur suit-elle un traumatisme important ?",
+        "en": "Did the pain follow significant trauma?"
+      },
+      "reason": {
+        "fr": "Un traumatisme peut necessiter un examen medical.",
+        "en": "Trauma may require medical assessment."
+      }
+    },
+    "q_headache_sudden_worst": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["pain", "neuro", "red_flag"],
+      "question": {
+        "fr": "Cefalee brutale, inhabituelle, \"la pire\" ?",
+        "en": "Sudden, unusual \"worst headache\"?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte neurologique (urgence).",
+        "en": "Neurologic red flag (emergency)."
+      }
+    },
+    "q_headache_neuro_symptoms": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["pain", "neuro", "red_flag"],
+      "question": {
+        "fr": "Troubles neurologiques (faiblesse, trouble parole, vision, convulsions) ?",
+        "en": "Neurologic symptoms (weakness, speech/vision changes, seizures)?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte neurologique.",
+        "en": "Neurologic red flag."
+      }
+    },
+
+    "q_eye_main_problem": {
+      "priority": 6,
+      "answer_type": "choice",
+      "choices": ["red_eye", "itchy_watery", "discharge", "pain", "foreign_body", "other"],
+      "tags": ["eye", "routing"],
+      "question": {
+        "fr": "Quel est le probleme oculaire principal ?",
+        "en": "What is the main eye problem?"
+      },
+      "reason": {
+        "fr": "Aide a distinguer allergie, conjonctivite, corps etranger, etc.",
+        "en": "Helps distinguish allergy, conjunctivitis, foreign body, etc."
+      }
+    },
+    "q_eye_vision_change": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["eye", "red_flag"],
+      "question": {
+        "fr": "Baisse de vision ou vision floue importante ?",
+        "en": "Decreased vision or significant blurred vision?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte ophtalmologique (avis urgent).",
+        "en": "Eye red flag (urgent evaluation)."
+      }
+    },
+    "q_eye_severe_pain": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["eye", "red_flag", "pain"],
+      "question": {
+        "fr": "Douleur oculaire severe ?",
+        "en": "Severe eye pain?"
+      },
+      "reason": {
+        "fr": "Peut indiquer une situation necessitant un avis urgent.",
+        "en": "May indicate a condition needing urgent evaluation."
+      }
+    },
+    "q_eye_photophobia": {
+      "priority": 2,
+      "answer_type": "yes_no",
+      "tags": ["eye", "red_flag"],
+      "question": {
+        "fr": "Photophobie importante (la lumiere fait tres mal) ?",
+        "en": "Significant photophobia (light is very painful)?"
+      },
+      "reason": {
+        "fr": "Peut orienter vers une atteinte plus severe.",
+        "en": "May suggest a more serious eye condition."
+      }
+    },
+    "q_eye_contact_lenses": {
+      "priority": 3,
+      "answer_type": "yes_no",
+      "tags": ["eye", "risk_factor"],
+      "question": {
+        "fr": "Portez-vous des lentilles de contact ?",
+        "en": "Do you wear contact lenses?"
+      },
+      "reason": {
+        "fr": "Augmente le risque d'infection corneenne.",
+        "en": "Increases risk of corneal infection."
+      }
+    },
+    "q_eye_trauma": {
+      "priority": 2,
+      "answer_type": "yes_no",
+      "tags": ["eye", "red_flag", "injury"],
+      "question": {
+        "fr": "Traumatisme oculaire recent ou corps etranger ?",
+        "en": "Recent eye trauma or foreign body?"
+      },
+      "reason": {
+        "fr": "Peut necessiter une evaluation rapide.",
+        "en": "May require prompt evaluation."
+      }
+    },
+    "q_eye_discharge_type": {
+      "priority": 7,
+      "answer_type": "choice",
+      "choices": ["none", "watery", "pus"],
+      "tags": ["eye"],
+      "question": {
+        "fr": "Ecoulement: aucun, larmoyant, ou purulent ?",
+        "en": "Discharge: none, watery, or pus-like?"
+      },
+      "reason": {
+        "fr": "Aide a orienter vers allergie vs infection.",
+        "en": "Helps differentiate allergy vs infection."
+      }
+    },
+
+    "q_uro_pain_urination": {
+      "priority": 5,
+      "answer_type": "yes_no",
+      "tags": ["urology"],
+      "question": {
+        "fr": "Brulures ou douleurs en urinant ?",
+        "en": "Burning or pain when urinating?"
+      },
+      "reason": {
+        "fr": "Oriente vers une infection urinaire ou irritation.",
+        "en": "Helps orient toward UTI or irritation."
+      }
+    },
+    "q_uro_frequency_urgency": {
+      "priority": 6,
+      "answer_type": "yes_no",
+      "tags": ["urology"],
+      "question": {
+        "fr": "Envies frequentes/urgentes d'uriner ?",
+        "en": "Frequent/urgent urination?"
+      },
+      "reason": {
+        "fr": "Symptome frequent d'infection urinaire basse.",
+        "en": "Common symptom of lower urinary tract infection."
+      }
+    },
+    "q_uro_flank_pain": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["urology", "red_flag", "pain"],
+      "question": {
+        "fr": "Douleur lombaire/un cote du dos (flanc) importante ?",
+        "en": "Significant flank/back pain on one side?"
+      },
+      "reason": {
+        "fr": "Peut indiquer une atteinte renale (avis medical rapide).",
+        "en": "May indicate kidney involvement (prompt evaluation)."
+      }
+    },
+    "q_uro_blood_in_urine": {
+      "priority": 1,
+      "answer_type": "yes_no",
+      "tags": ["urology", "red_flag"],
+      "question": {
+        "fr": "Sang dans les urines ?",
+        "en": "Blood in urine?"
+      },
+      "reason": {
+        "fr": "Signe d'alerte urologique (avis medical).",
+        "en": "Urologic red flag (medical evaluation)."
       }
     }
   }

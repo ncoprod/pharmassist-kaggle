@@ -155,6 +155,58 @@ function App() {
     const value = followUpAnswers[q.question_id] ?? ''
     const testId = `follow-up-answer-${q.question_id}`
 
+    function labelForChoice(choice: string): string {
+      // Default label is the raw choice code.
+      if (runLanguage === 'fr') {
+        if (choice === 'mild') return 'Leger'
+        if (choice === 'moderate') return 'Modere'
+        if (choice === 'severe') return 'Severe'
+      }
+
+      if (q.question_id === 'q_primary_domain') {
+        if (runLanguage === 'fr') {
+          return choice === 'allergy_ent'
+            ? 'Allergie / ORL'
+            : choice === 'digestive'
+              ? 'Digestif'
+              : choice === 'skin'
+                ? 'Peau'
+                : choice === 'pain'
+                  ? 'Douleur'
+                  : choice === 'eye'
+                    ? 'Oeil'
+                    : choice === 'urology'
+                      ? 'Urinaire'
+                      : choice === 'respiratory'
+                        ? 'Respiratoire'
+                        : choice === 'other'
+                          ? 'Autre'
+                          : choice
+        }
+
+        // EN: keep short, human-readable labels.
+        return choice === 'allergy_ent'
+          ? 'Allergy / ENT'
+          : choice === 'digestive'
+            ? 'Digestive'
+            : choice === 'skin'
+              ? 'Skin'
+              : choice === 'pain'
+                ? 'Pain'
+                : choice === 'eye'
+                  ? 'Eye'
+                  : choice === 'urology'
+                    ? 'Urinary'
+                    : choice === 'respiratory'
+                      ? 'Respiratory'
+                      : choice === 'other'
+                        ? 'Other'
+                        : choice
+      }
+
+      return choice
+    }
+
     if (q.answer_type === 'yes_no') {
       return (
         <select
@@ -191,15 +243,7 @@ function App() {
           <option value="">—</option>
           {q.choices.map((c) => (
             <option key={c} value={c}>
-              {runLanguage === 'fr'
-                ? c === 'mild'
-                  ? 'Leger'
-                  : c === 'moderate'
-                    ? 'Modere'
-                    : c === 'severe'
-                      ? 'Severe'
-                      : c
-                : c}
+              {labelForChoice(c)}
             </option>
           ))}
         </select>

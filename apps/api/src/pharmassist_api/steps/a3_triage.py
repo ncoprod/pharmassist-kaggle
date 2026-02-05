@@ -39,6 +39,10 @@ def triage_and_followup(
 
     # Red flags can come from extracted text OR explicit follow-up answers.
     red_flags = _detect_red_flags(text_blob, answers)
+    if _is_low_info(intake_extracted):
+        overall_sev = _norm(answers.get("q_overall_severity") or "")
+        if overall_sev == "severe":
+            red_flags.add("RF_SEVERE_SYMPTOMS")
     intake_extracted = dict(intake_extracted)
     intake_extracted["red_flags"] = sorted(red_flags)
 
@@ -154,7 +158,71 @@ def _generate_follow_up_questions(
 
     # Low-info cases need a minimal funnel.
     if _is_low_info(intake_extracted):
-        required_ids |= {"q_duration", "q_fever", "q_breathing"}
+        # Required safety + routing questions (no free text).
+        required_ids |= {
+            "q_primary_domain",
+            "q_breathing",
+            "q_chest_pain",
+            "q_fever",
+            "q_overall_severity",
+        }
+
+        # If the domain is known (from follow-up answers), we can surface
+        # additional domain-specific questions as optional candidates.
+        primary_domain = answers.get("q_primary_domain")
+        if isinstance(primary_domain, str) and primary_domain:
+            domain_optional: dict[str, set[str]] = {
+                "allergy_ent": {
+                    "q_allergy_severity",
+                    "q_allergy_known_trigger",
+                    "q_allergy_eye_symptoms",
+                    "q_allergy_nasal_congestion",
+                    "q_allergy_wheezing_or_asthma",
+                },
+                "digestive": {
+                    "q_gi_main_symptom",
+                    "q_gi_vomiting",
+                    "q_gi_abdominal_pain_severe",
+                    "q_gi_blood_in_stool",
+                    "q_gi_dehydration_signs",
+                },
+                "skin": {
+                    "q_skin_main_problem",
+                    "q_skin_spreading_fast",
+                    "q_skin_mucosa_blisters",
+                    "q_skin_pus_or_warmth",
+                    "q_skin_new_drug_recent",
+                },
+                "pain": {
+                    "q_pain_location",
+                    "q_pain_after_trauma",
+                    "q_headache_sudden_worst",
+                    "q_headache_neuro_symptoms",
+                },
+                "eye": {
+                    "q_eye_main_problem",
+                    "q_eye_vision_change",
+                    "q_eye_severe_pain",
+                    "q_eye_contact_lenses",
+                    "q_eye_trauma",
+                },
+                "urology": {
+                    "q_uro_pain_urination",
+                    "q_uro_frequency_urgency",
+                    "q_uro_flank_pain",
+                    "q_uro_blood_in_urine",
+                },
+                "respiratory": {
+                    "q_resp_cough",
+                    "q_resp_wheezing",
+                    "q_resp_cyanosis",
+                    "q_resp_sore_throat",
+                    "q_resp_sputum_color",
+                    "q_resp_asthma_copd",
+                },
+                "other": set(),
+            }
+            optional_ids |= domain_optional.get(primary_domain, set())
     else:
         # Allergy-like symptoms: rule out fever/breathing issues.
         labels = [
@@ -171,13 +239,15 @@ def _generate_follow_up_questions(
             # Follow-up is optional here: the default path should proceed.
             optional_ids |= {"q_fever", "q_breathing", "q_allergy_severity"}
 
-    # Ask duration if we don't have duration_days anywhere.
-    has_duration = any(
-        isinstance(s, dict) and isinstance(s.get("duration_days"), int)
-        for s in (intake_extracted.get("symptoms") or [])
-    )
-    if not has_duration:
-        required_ids.add("q_duration")
+    # Ask duration if we don't have duration_days anywhere (except for low-info
+    # funnels where routing + safety screens matter more than timeline).
+    if not _is_low_info(intake_extracted):
+        has_duration = any(
+            isinstance(s, dict) and isinstance(s.get("duration_days"), int)
+            for s in (intake_extracted.get("symptoms") or [])
+        )
+        if not has_duration:
+            required_ids.add("q_duration")
 
     # If fever is present, we need the max temperature to assess high fever (>= 39C).
     if _is_yes(answers.get("q_fever")) and "q_temperature" not in answers:
@@ -197,14 +267,17 @@ def _generate_follow_up_questions(
     )
 
     # Optional MedGemma selector: choose a subset (closed allowlist).
-    selected_ids, selector_meta = maybe_select_followup_question_ids(
-        intake_extracted=intake_extracted,
-        llm_context=llm_context,
-        candidate_ids=candidate_ids,
-        question_bank=bank,
-        language=language,
-        max_k=max_k,
-    )
+    selected_ids: list[str] | None = None
+    selector_meta: dict[str, Any] = {"attempted": False, "mode": "rules", "max_k": max_k}
+    if optional_ids and len(required_ids) < max_k:
+        selected_ids, selector_meta = maybe_select_followup_question_ids(
+            intake_extracted=intake_extracted,
+            llm_context=llm_context,
+            candidate_ids=candidate_ids,
+            question_bank=bank,
+            language=language,
+            max_k=max_k,
+        )
 
     # Safety property: required questions are never dropped by the model.
     required_sorted = sorted(
@@ -323,6 +396,24 @@ def _detect_red_flags(text_blob_norm: str, answers: dict[str, str]) -> set[str]:
         rf.add("RF_BREATHING_DIFFICULTY")
     if _is_yes(answers.get("q_chest_pain")):
         rf.add("RF_CHEST_PAIN")
+    if _is_yes(answers.get("q_severe_allergic_reaction")):
+        rf.add("RF_ANAPHYLAXIS")
+    if _is_yes(answers.get("q_confusion_or_fainting")):
+        rf.add("RF_NEURO")
+    if _is_yes(answers.get("q_resp_cyanosis")):
+        rf.add("RF_BREATHING_DIFFICULTY")
+    if _is_yes(answers.get("q_gi_blood_in_stool")) or _is_yes(answers.get("q_gi_black_stool")):
+        rf.add("RF_BLOOD")
+    if _is_yes(answers.get("q_gi_vomiting_blood")):
+        rf.add("RF_BLOOD")
+    if _is_yes(answers.get("q_headache_sudden_worst")) or _is_yes(
+        answers.get("q_headache_neuro_symptoms")
+    ):
+        rf.add("RF_NEURO")
+    if _is_yes(answers.get("q_eye_vision_change")):
+        rf.add("RF_EYE_VISION_CHANGE")
+    if _is_yes(answers.get("q_uro_blood_in_urine")):
+        rf.add("RF_BLOOD")
 
     # Fever >= 39C is a red flag if a temperature was provided.
     temp_c = _parse_temperature_c(answers.get("q_temperature"))

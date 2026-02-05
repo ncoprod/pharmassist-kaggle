@@ -56,23 +56,12 @@ test('low-info case requires follow-up, rerun completes', async ({ page }) => {
   const count = await answers.count()
   expect(count).toBeGreaterThan(0)
 
-  for (let i = 0; i < count; i++) {
-    const control = answers.nth(i)
-    const tag = await control.evaluate((el) => el.tagName.toLowerCase())
-
-    if (tag === 'select') {
-      await control.selectOption('no')
-      continue
-    }
-
-    if (tag === 'input') {
-      const type = (await control.getAttribute('type')) ?? 'text'
-      await control.fill(type === 'number' ? '7' : 'no')
-      continue
-    }
-
-    await control.fill('n/a')
-  }
+  // Low-info funnel should include a domain selector + basic safety screens.
+  await page.getByTestId('follow-up-answer-q_primary_domain').selectOption('digestive')
+  await page.getByTestId('follow-up-answer-q_overall_severity').selectOption('mild')
+  await page.getByTestId('follow-up-answer-q_fever').selectOption('no')
+  await page.getByTestId('follow-up-answer-q_breathing').selectOption('no')
+  await page.getByTestId('follow-up-answer-q_chest_pain').selectOption('no')
 
   await page.getByTestId('follow-up-rerun').click()
 

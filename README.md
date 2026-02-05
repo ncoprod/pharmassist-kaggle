@@ -151,7 +151,12 @@ else:
 #
 # This run is expected to stop in `needs_more_info` and show follow-up questions.
 import os, sys
-sys.path.insert(0, "apps/api/src")
+from pathlib import Path
+
+REPO = "/kaggle/working/pharmassist-kaggle"
+API_SRC = f"{REPO}/apps/api/src"
+assert Path(API_SRC).exists(), API_SRC
+sys.path.insert(0, API_SRC)
 
 os.environ["PHARMASSIST_DB_PATH"] = "/kaggle/working/pharmassist_demo.db"
 os.environ["PHARMASSIST_USE_MEDGEMMA"] = "1"
@@ -175,7 +180,12 @@ print("follow_up_question_ids:", [q["question_id"] for q in r["artifacts"]["reco
 # IMPORTANT: do NOT use asyncio.run(...) inside notebooks (an event loop is already running).
 # Use top-level `await` instead.
 import os, sys
-sys.path.insert(0, "apps/api/src")
+from pathlib import Path
+
+REPO = "/kaggle/working/pharmassist-kaggle"
+API_SRC = f"{REPO}/apps/api/src"
+assert Path(API_SRC).exists(), API_SRC
+sys.path.insert(0, API_SRC)
 
 os.environ["PHARMASSIST_DB_PATH"] = "/kaggle/working/pharmassist_demo.db"
 os.environ["PHARMASSIST_USE_MEDGEMMA"] = "1"
