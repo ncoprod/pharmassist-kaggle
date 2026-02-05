@@ -142,7 +142,7 @@ os.environ["HF_HOME"] = "/kaggle/working/hf"
 import importlib, subprocess, sys
 
 need = []
-for pkg in ["transformers", "accelerate", "safetensors", "jsonschema"]:
+for pkg in ["torch", "transformers", "accelerate", "safetensors", "jsonschema"]:
     try:
         importlib.import_module(pkg)
     except Exception:
@@ -209,7 +209,7 @@ sys.path.insert(0, API_SRC)
 os.environ["PHARMASSIST_DB_PATH"] = "/kaggle/working/pharmassist_demo.db"
 os.environ["PHARMASSIST_USE_MEDGEMMA"] = "1"
 os.environ["PHARMASSIST_MEDGEMMA_MODEL"] = "google/medgemma-4b-it"
-os.environ["PHARMASSIST_USE_MEDGEMMA_REPORT"] = "1"  # optional
+os.environ["PHARMASSIST_USE_MEDGEMMA_REPORT"] = "0"  # set to "1" if you want A7 model-backed too
 os.environ["PHARMASSIST_USE_MEDGEMMA_FOLLOWUP"] = "0"  # keep off for this fully-automated demo
 
 from pharmassist_api import db, orchestrator
@@ -234,6 +234,21 @@ print("symptoms:", [s["label"] for s in r["artifacts"]["intake_extracted"]["symp
 print("ranked_products:", len(r["artifacts"]["recommendation"].get("ranked_products", [])))
 print("evidence_items:", len(r["artifacts"].get("evidence_items", [])))
 print("\\n--- report head ---\\n", r["artifacts"].get("report_markdown", "")[:600])
+```
+
+```python
+# 8) Privacy proof: ensure raw OCR snippet is NOT persisted in DB events
+import json
+from pharmassist_api.cases.load_case import load_case_bundle
+
+bundle = load_case_bundle("case_000042")
+needle = "PATIENT NOTE"
+assert needle in bundle["intake_text_ocr"]["en"]
+
+events = db.list_events(run["run_id"])
+blob = json.dumps([e["data"] for e in events], ensure_ascii=False)
+print("events:", len(events))
+print("needle_in_events:", needle in blob)  # must be False
 ```
 
 ## Running the API with MedGemma enabled (optional)
