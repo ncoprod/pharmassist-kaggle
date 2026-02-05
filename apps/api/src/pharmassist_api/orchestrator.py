@@ -10,7 +10,9 @@ from typing import Any
 from . import db
 from .cases.load_case import load_case_bundle
 from .contracts.validate_schema import validate_instance
+from .follow_up_answers import validate_and_canonicalize_follow_up_answers
 from .privacy.phi_boundary import PhiBoundaryError, raise_if_phi
+from .privacy.phi_boundary import scan_text
 from .steps.a1_intake_extraction import extract_intake
 from .steps.a3_triage import triage_and_followup
 from .steps.a4_evidence_retrieval import retrieve_evidence
@@ -18,6 +20,7 @@ from .steps.a5_safety import compute_safety_warnings
 from .steps.a6_product_ranker import rank_products
 from .steps.a7_report_composer import compose_report_markdown
 from .steps.a8_handout import compose_handout_markdown
+from .validators.phi_scanner import scan_for_phi
 from .validators.policy_validate import validate_payload
 
 SCHEMA_VERSION = "0.0.0"
@@ -85,6 +88,25 @@ def new_run_with_answers(
 ) -> dict[str, Any]:
     run_id = str(uuid.uuid4())
     created_at = _now_iso()
+
+    if follow_up_answers:
+        violations = scan_for_phi(follow_up_answers, path="$.follow_up_answers")
+        # Defense in depth: treat "label-like" PHI (e.g. "Nom: ...") as BLOCKER too.
+        for idx, item in enumerate(follow_up_answers):
+            if not isinstance(item, dict):
+                continue
+            ans = item.get("answer")
+            if isinstance(ans, str) and ans.strip():
+                violations.extend(scan_text(ans, json_path=f"$.follow_up_answers[{idx}].answer"))
+        blockers = [v for v in violations if v.severity == "BLOCKER"]
+        if blockers:
+            raise ValueError("PHI detected in follow_up_answers")
+
+        canonical, issues = validate_and_canonicalize_follow_up_answers(follow_up_answers)
+        if issues:
+            first = issues[0]
+            raise ValueError(f"Invalid follow_up_answers at {first.get('json_path')}: {first.get('message')}")
+        follow_up_answers = canonical
 
     run = {
         "schema_version": SCHEMA_VERSION,
