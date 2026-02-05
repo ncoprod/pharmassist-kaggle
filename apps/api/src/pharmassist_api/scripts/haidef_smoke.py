@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -30,7 +31,12 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--debug",
         action="store_true",
-        help="Print raw model output on failure (may include OCR echoes).",
+        help="Print extra diagnostics (lengths, hashes).",
+    )
+    p.add_argument(
+        "--print-raw-output",
+        action="store_true",
+        help="Print raw model output on failure (unsafe; use only with synthetic cases).",
     )
     return p.parse_args()
 
@@ -255,7 +261,10 @@ def main() -> int:
     if not isinstance(parsed, dict):
         sys.stderr.write("Model output did not contain a JSON object.\n")
         if args.debug:
-            sys.stderr.write(f"len(raw)={len(raw)} repr(head)={raw[:400]!r}\n")
+            sha12 = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+            sys.stderr.write(f"raw_len={len(raw)} sha256_12={sha12}\n")
+        if args.print_raw_output:
+            sys.stderr.write(f"repr(head)={raw[:400]!r}\n")
         return 1
 
     parsed.setdefault("schema_version", "0.0.0")
@@ -265,6 +274,9 @@ def main() -> int:
         for e in errors:
             sys.stderr.write(f"- {e.json_path}: {e.message}\n")
         if args.debug:
+            sha12 = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+            sys.stderr.write(f"\nraw_len={len(raw)} sha256_12={sha12}\n")
+        if args.print_raw_output:
             sys.stderr.write("\nRaw model output (truncated):\n")
             sys.stderr.write(raw[:2000] + "\n")
         return 1
