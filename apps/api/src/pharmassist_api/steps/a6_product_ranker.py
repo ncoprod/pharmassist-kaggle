@@ -186,7 +186,9 @@ def _matches_allergy(product: dict[str, Any], allergy_terms: set[str]) -> bool:
     return any(t in haystack for t in allergy_terms)
 
 
-def _infer_target_category(intake_extracted: dict[str, Any], *, primary_domain: str | None = None) -> str:
+def _infer_target_category(
+    intake_extracted: dict[str, Any], *, primary_domain: str | None = None
+) -> str:
     if isinstance(primary_domain, str) and primary_domain:
         mapping = {
             "allergy_ent": "allergy",
