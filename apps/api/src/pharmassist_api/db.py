@@ -27,6 +27,26 @@ def _ensure_parent_dir(path: Path) -> None:
         pass
 
 
+def _should_enable_wal() -> bool:
+    """Whether to enable WAL journal mode for SQLite connections.
+
+    WAL reduces lock contention for the running API, but it can be flaky on some
+    temp directories during unit tests (macOS `tmp_path` cases were observed).
+    """
+    raw = os.getenv("PHARMASSIST_SQLITE_WAL", "").strip().lower()
+    if raw in {"0", "false", "no"}:
+        return False
+    if raw in {"1", "true", "yes"}:
+        return True
+
+    # Pytest sets this env var for each test. Disable WAL for unit tests to
+    # improve filesystem portability.
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return False
+
+    return True
+
+
 def _connect() -> sqlite3.Connection:
     path = db_path()
     _ensure_parent_dir(path)
@@ -53,12 +73,14 @@ def _connect() -> sqlite3.Connection:
 
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    # Best-effort WAL mode (reduces lock contention). Some temp dirs / FS setups
-    # may not support WAL reliably; fall back silently.
-    try:
-        conn.execute("PRAGMA journal_mode = WAL;")
-    except sqlite3.OperationalError:
-        pass
+    # Best-effort WAL mode (reduces lock contention). Some filesystems and
+    # temp dirs are flaky with WAL, so we disable it under pytest and also
+    # keep it best-effort in general.
+    if _should_enable_wal():
+        try:
+            conn.execute("PRAGMA journal_mode = WAL;")
+        except sqlite3.OperationalError:
+            pass
     # Avoid transient "database is locked" errors under light concurrency.
     conn.execute("PRAGMA busy_timeout = 5000;")
     return conn
