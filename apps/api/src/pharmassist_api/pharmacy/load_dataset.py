@@ -31,6 +31,54 @@ def _iter_jsonl_gz(path: Path) -> Iterable[Any]:
             yield json.loads(line)
 
 
+def _sanitize_event_payload(event_type: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Whitelist pharmacy-event payload shapes.
+
+    Defense-in-depth: if a user points `PHARMASSIST_PHARMACY_DATA_DIR` at an
+    external dataset, we must never persist arbitrary free-text blobs (e.g.
+    OCR/PDF text) into SQLite.
+    """
+    if event_type == "symptom_intake":
+        intake_extracted = payload.get("intake_extracted")
+        if not isinstance(intake_extracted, dict):
+            return None
+        validate_instance(intake_extracted, "intake_extracted")
+        return {"intake_extracted": intake_extracted}
+
+    if event_type == "otc_purchase":
+        items = payload.get("items")
+        if not isinstance(items, list):
+            return None
+        out_items: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            sku = item.get("sku")
+            qty = item.get("qty")
+            if not (isinstance(sku, str) and sku.strip()):
+                continue
+            if not isinstance(qty, int):
+                continue
+            if qty <= 0 or qty > 99:
+                continue
+            out_items.append({"sku": sku.strip(), "qty": qty})
+        if not out_items:
+            return None
+        return {"items": out_items}
+
+    if event_type == "prescription_added":
+        meds = payload.get("rx_medications")
+        if not isinstance(meds, list):
+            return None
+        out_meds = [m.strip() for m in meds if isinstance(m, str) and m.strip()]
+        if not out_meds:
+            return None
+        return {"rx_medications": out_meds[:50]}
+
+    # Unknown event types are ignored (safer than persisting unknown payloads).
+    return None
+
+
 def ensure_pharmacy_dataset_loaded(*, dataset_dir: Path | None = None) -> dict[str, int]:
     """Idempotently load the synthetic pharmacy dataset into SQLite.
 
@@ -135,13 +183,18 @@ def ensure_pharmacy_dataset_loaded(*, dataset_dir: Path | None = None) -> dict[s
         if not isinstance(payload, dict):
             payload = {}
 
+        payload_sanitized = _sanitize_event_payload(event_type, payload)
+        if payload_sanitized is None:
+            continue
+        validate_instance(payload_sanitized, "pharmacy_event_payload")
+
         db.upsert_pharmacy_event(
             event_ref=event_ref,
             visit_ref=visit_ref,
             patient_ref=patient_ref,
             occurred_at=occurred_at,
             event_type=event_type,
-            payload=payload,
+            payload=payload_sanitized,
         )
         events_loaded += 1
 

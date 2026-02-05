@@ -43,21 +43,27 @@ def compose_report_markdown(
             evidence_items=evidence_items,
             language=language,
         )
-        out = medgemma_generate_text(
-            user_content=prompt,
-            system=(
-                "You are a pharmacist-facing report writer.\n"
-                "Return markdown only.\n"
-                "OTC/parapharmacy decision support only.\n"
-                "Do NOT provide prescription-medication advice.\n"
-                "Citations MUST use the provided evidence ids in brackets, e.g. [ev_allergy_001]."
-            ),
-            max_new_tokens=700,
-        )
-        if isinstance(out, str) and out.strip():
-            md = out.strip()
-            if _is_safe_markdown(md, evidence_ids=evidence_ids, path="$.report_markdown"):
-                return md
+        # Hard PHI boundary: never send identifier-like content to any model.
+        if any(v.severity == "BLOCKER" for v in scan_text(prompt, "$.a7_report_composer.prompt")):
+            prompt = ""
+
+        if prompt:
+            out = medgemma_generate_text(
+                user_content=prompt,
+                system=(
+                    "You are a pharmacist-facing report writer.\n"
+                    "Return markdown only.\n"
+                    "OTC/parapharmacy decision support only.\n"
+                    "Do NOT provide prescription-medication advice.\n"
+                    "Citations MUST use the provided evidence ids in brackets, "
+                    "e.g. [ev_allergy_001]."
+                ),
+                max_new_tokens=700,
+            )
+            if isinstance(out, str) and out.strip():
+                md = out.strip()
+                if _is_safe_markdown(md, evidence_ids=evidence_ids, path="$.report_markdown"):
+                    return md
 
     # Deterministic fallback template.
     return _render_report_template(

@@ -18,6 +18,7 @@ from .steps.a5_safety import compute_safety_warnings
 from .steps.a6_product_ranker import rank_products
 from .steps.a7_report_composer import compose_report_markdown
 from .steps.a8_handout import compose_handout_markdown
+from .validators.policy_validate import validate_payload
 
 SCHEMA_VERSION = "0.0.0"
 
@@ -641,6 +642,50 @@ async def run_pipeline(run_id: str) -> None:
 
     # Build a redacted trace artifact for audit/debugging (no prompts, no OCR text).
     artifacts["trace"] = _build_trace_artifact(run_id)
+
+    # Final contracts-first gate: never persist an invalid/policy-violating run.
+    candidate_run = {**run, "status": "completed", "artifacts": artifacts, "policy_violations": []}
+    violations = validate_payload(candidate_run, schema_name="run")
+    blockers = [v for v in violations if v.severity == "BLOCKER"]
+    if blockers:
+        policy_violations = [
+            {
+                "code": v.code,
+                "severity": v.severity,
+                "json_path": v.json_path,
+                "message": v.message,
+            }
+            for v in blockers
+        ]
+        safe_artifacts: dict[str, Any] = {}
+        if isinstance(artifacts.get("trace"), dict):
+            safe_artifacts["trace"] = artifacts["trace"]
+
+        db.update_run(
+            run_id,
+            status="failed_safe",
+            artifacts=safe_artifacts,
+            policy_violations=policy_violations,
+        )
+        emit_event(
+            run_id,
+            "policy_violation",
+            {
+                "step": "finalize",
+                "message": "Policy validation failed; stopping safely.",
+                "ocr_len": ocr_len,
+                "ocr_sha256_12": ocr_sha,
+                "violations": policy_violations,
+                "ts": _now_iso(),
+            },
+        )
+        emit_event(
+            run_id,
+            "finalized",
+            {"message": "Run failed_safe (policy violation).", "ts": _now_iso()},
+        )
+        _RUN_QUEUES.pop(run_id, None)
+        return
 
     db.update_run(run_id, status="completed", artifacts=artifacts, policy_violations=[])
 

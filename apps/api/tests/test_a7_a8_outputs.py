@@ -77,3 +77,34 @@ def test_report_and_handout_are_policy_safe_and_citations_valid():
     handout = compose_handout_markdown(recommendation=reco, language="en")
     assert handout.strip()
     assert not lint_rx_advice(handout, path="$.handout_markdown")
+
+
+def test_report_composer_skips_model_call_when_prompt_has_phi(monkeypatch):
+    monkeypatch.setenv("PHARMASSIST_USE_MEDGEMMA_REPORT", "1")
+
+    from pharmassist_api.steps import a7_report_composer as mod
+
+    called = {"n": 0}
+
+    def _fake_generate_text(*, user_content: str, system: str, max_new_tokens: int = 0):
+        called["n"] += 1
+        return "# should-not-be-called\n"
+
+    monkeypatch.setattr(mod, "medgemma_generate_text", _fake_generate_text)
+
+    intake_extracted = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "Name: John Doe",
+        "symptoms": [{"label": "sneezing", "severity": "unknown"}],
+        "red_flags": [],
+    }
+
+    report = mod.compose_report_markdown(
+        intake_extracted=intake_extracted,
+        recommendation=None,
+        evidence_items=None,
+        language="en",
+    )
+
+    assert called["n"] == 0
+    assert report.startswith("# Pharmacist report")

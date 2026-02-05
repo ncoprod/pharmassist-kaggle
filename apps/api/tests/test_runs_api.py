@@ -32,3 +32,23 @@ def test_create_run_returns_schema_compliant_run(tmp_path, monkeypatch):
 
     # Clean up (defense-in-depth; tmp_path should be cleaned by pytest anyway).
     os.environ.pop("PHARMASSIST_DB_PATH", None)
+
+
+def test_create_run_rejects_invalid_follow_up_answers(tmp_path, monkeypatch):
+    monkeypatch.setenv("PHARMASSIST_DB_PATH", str(tmp_path / "test.db"))
+
+    from pharmassist_api.main import app
+
+    with TestClient(app) as client:
+        resp = client.post(
+            "/runs",
+            json={
+                "case_ref": "case_000042",
+                "language": "fr",
+                "trigger": "manual",
+                "follow_up_answers": [{"question_id": "q_primary_domain", "answer": "not_a_choice"}],
+            },
+        )
+        assert resp.status_code == 400
+        payload = resp.json()
+        assert payload.get("detail", {}).get("error") == "Invalid follow_up_answers"
