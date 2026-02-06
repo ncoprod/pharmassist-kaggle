@@ -112,4 +112,5 @@ echo "Ensuring Playwright Chromium is installed ..."
 (cd "${ROOT}/apps/web" && npx -y playwright install chromium) >/dev/null 2>&1
 
 echo "Running Playwright tests ..."
-(cd "${ROOT}" && WEB_PORT="${WEB_PORT}" E2E_BASE_URL="http://${WEB_HOST}:${WEB_PORT}" npm -w apps/web run test:e2e)
+# Keep test output deterministic and avoid NO_COLOR/FORCE_COLOR warning spam.
+(cd "${ROOT}" && env -u NO_COLOR -u FORCE_COLOR WEB_PORT="${WEB_PORT}" E2E_BASE_URL="http://${WEB_HOST}:${WEB_PORT}" npm -w apps/web run test:e2e)
