@@ -103,6 +103,14 @@ make e2e
 ```
 
 Note: `make e2e` starts and stops the API/web servers automatically for Playwright.
+It auto-selects free local ports when `8000`/`5174` are already busy, which avoids
+false failures from stale dev servers.
+To run hardened E2E with auth enabled:
+
+```bash
+PHARMASSIST_API_KEY='change-me' PHARMASSIST_ADMIN_API_KEY='change-me' make e2e
+```
+
 For manual UI testing, run `make api-dev` and `make web-dev` in separate terminals.
 
 ## Security / Red-Team checks
