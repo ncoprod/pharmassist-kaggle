@@ -1,5 +1,5 @@
 .PHONY: help setup api-install api-dev api-lint web-install web-dev web-build web-lint lint build
-.PHONY: e2e
+.PHONY: e2e redteam security-audit
 .PHONY: validate
 
 PYTHON ?= python3
@@ -48,3 +48,12 @@ validate: $(VENV_DIR)
 
 e2e: $(VENV_DIR)
 	./scripts/e2e.sh
+
+redteam: $(VENV_DIR)
+	./scripts/redteam_check.sh
+
+security-audit: $(VENV_DIR)
+	$(VENV_DIR)/bin/python -m pip install -q pip-audit bandit
+	$(VENV_DIR)/bin/pip-audit
+	$(VENV_DIR)/bin/bandit -q -r apps/api/src -lll
+	npm audit --omit=dev --audit-level=high
