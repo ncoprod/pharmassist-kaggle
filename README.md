@@ -199,11 +199,33 @@ Suggested notebook cells (in order):
 
 ```python
 # 2) Load HF token from Kaggle Secrets (create a secret named "HF_TOKEN")
-from kaggle_secrets import UserSecretsClient
+#    Note: Kaggle secrets backend can intermittently fail. We retry and keep notebook runnable.
 import os
+import time
 
-os.environ["HF_TOKEN"] = UserSecretsClient().get_secret("HF_TOKEN")
-print("HF_TOKEN loaded:", bool(os.environ.get("HF_TOKEN")))
+HF_TOKEN_OK = False
+
+def load_hf_token(max_attempts=3):
+    if os.environ.get("HF_TOKEN"):
+        return True
+    try:
+        from kaggle_secrets import UserSecretsClient
+    except Exception as exc:
+        print("kaggle_secrets unavailable:", exc)
+        return False
+    for attempt in range(1, max_attempts + 1):
+        try:
+            token = UserSecretsClient().get_secret("HF_TOKEN")
+            if token:
+                os.environ["HF_TOKEN"] = token
+                return True
+        except Exception as exc:
+            print(f"HF_TOKEN fetch attempt {attempt}/{max_attempts} failed: {exc}")
+            time.sleep(attempt * 2)
+    return False
+
+HF_TOKEN_OK = load_hf_token()
+print("HF_TOKEN loaded:", HF_TOKEN_OK)
 ```
 
 ```python
@@ -232,12 +254,37 @@ else:
 
 ```python
 # 5) Run MedGemma extraction smoke test (validates JSON against schema)
-!PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.haidef_smoke \
-  --model google/medgemma-4b-it \
-  --mode conditional \
-  --case-ref case_000042 \
-  --language en \
-  --max-new-tokens 256
+#    If HF token isn't available, explicitly skip this step.
+import os
+import subprocess
+import sys
+
+if HF_TOKEN_OK:
+    cmd = [
+        sys.executable,
+        "-m",
+        "pharmassist_api.scripts.haidef_smoke",
+        "--model",
+        "google/medgemma-4b-it",
+        "--mode",
+        "conditional",
+        "--case-ref",
+        "case_000042",
+        "--language",
+        "en",
+        "--max-new-tokens",
+        "256",
+        "--debug",
+    ]
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "apps/api/src"
+    proc = subprocess.run(cmd, env=env, text=True, capture_output=True)
+    print(proc.stdout)
+    print("HAIDEF_SMOKE_STATUS:", "PASS" if proc.returncode == 0 else "FAIL")
+    if proc.returncode != 0:
+        print(proc.stderr)
+else:
+    print("HAIDEF_SMOKE_STATUS: SKIP (HF_TOKEN unavailable)")
 ```
 
 ```python
