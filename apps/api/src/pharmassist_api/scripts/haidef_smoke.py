@@ -10,6 +10,7 @@ from typing import Any, Literal
 from pharmassist_api.cases.load_case import load_case_bundle
 from pharmassist_api.contracts.validate_schema import validate_or_return_errors
 from pharmassist_api.privacy.phi_boundary import raise_if_phi
+from pharmassist_api.steps.a1_intake_extraction import _canonicalize_intake_extracted
 
 
 def _parse_args() -> argparse.Namespace:
@@ -64,6 +65,13 @@ def _build_user_content(ocr_text: str, language: Literal["fr", "en"]) -> str:
         "OCR TEXT:\n"
         f"{ocr_text}\n"
     )
+
+
+def _canonicalize_payload(
+    payload: dict[str, Any], language: Literal["fr", "en"]
+) -> dict[str, Any]:
+    # Reuse runtime canonicalization so smoke output reflects production behavior.
+    return _canonicalize_intake_extracted(payload, language)
 
 
 def _tokenize_chat(tok: Any, user_content: str) -> dict[str, Any]:
@@ -260,6 +268,7 @@ def main() -> int:
             sys.stderr.write(f"raw_len={len(raw)} sha256_12={sha12}\n")
         return 1
 
+    parsed = _canonicalize_payload(parsed, args.language)
     parsed.setdefault("schema_version", "0.0.0")
     errors = validate_or_return_errors(parsed, "intake_extracted")
     if errors:

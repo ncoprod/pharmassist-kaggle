@@ -69,6 +69,8 @@ app.add_middleware(
 
 _ADMIN_RATE_LOCK = threading.Lock()
 _ADMIN_RATE_BUCKETS: dict[str, deque[float]] = {}
+_STREAM_TOKEN_LOCK = threading.Lock()
+_STREAM_TOKENS: dict[str, tuple[str, float]] = {}
 
 
 def _env_int(name: str, default: int, *, low: int, high: int) -> int:
@@ -96,6 +98,10 @@ def _admin_api_key() -> str:
 
 def _api_key() -> str:
     return (os.getenv("PHARMASSIST_API_KEY") or "").strip()
+
+
+def _stream_token_ttl_sec() -> int:
+    return _env_int("PHARMASSIST_EVENT_STREAM_TOKEN_TTL_SEC", 600, low=30, high=3600)
 
 
 def _client_ip(request: Request) -> str:
@@ -231,13 +237,45 @@ def _enforce_admin_controls(request: Request, *, endpoint: str, meta: dict[str, 
 def reset_admin_guard_state_for_tests() -> None:
     with _ADMIN_RATE_LOCK:
         _ADMIN_RATE_BUCKETS.clear()
+    with _STREAM_TOKEN_LOCK:
+        _STREAM_TOKENS.clear()
 
 
 def _provided_api_key(request: Request) -> str:
-    header_value = (request.headers.get("x-api-key") or "").strip()
-    if header_value:
-        return header_value
-    return (request.query_params.get("api_key") or "").strip()
+    return (request.headers.get("x-api-key") or "").strip()
+
+
+def _prune_expired_stream_tokens(*, now: float) -> None:
+    expired = [token for token, (_run_id, exp) in _STREAM_TOKENS.items() if exp <= now]
+    for token in expired:
+        _STREAM_TOKENS.pop(token, None)
+
+
+def _issue_stream_token(*, run_id: str) -> tuple[str, int]:
+    ttl = _stream_token_ttl_sec()
+    token = secrets.token_urlsafe(32)
+    expires_at = time.monotonic() + float(ttl)
+    with _STREAM_TOKEN_LOCK:
+        _prune_expired_stream_tokens(now=time.monotonic())
+        _STREAM_TOKENS[token] = (run_id, expires_at)
+    return token, ttl
+
+
+def _is_valid_stream_token(*, run_id: str, token: str) -> bool:
+    token_norm = token.strip()
+    if not token_norm:
+        return False
+    with _STREAM_TOKEN_LOCK:
+        now = time.monotonic()
+        _prune_expired_stream_tokens(now=now)
+        row = _STREAM_TOKENS.get(token_norm)
+        if not row:
+            return False
+        token_run_id, expires_at = row
+        if expires_at <= now:
+            _STREAM_TOKENS.pop(token_norm, None)
+            return False
+        return token_run_id == run_id
 
 
 def _enforce_data_controls(request: Request, *, endpoint: str) -> None:
@@ -416,18 +454,29 @@ def get_run(request: Request, run_id: str) -> dict[str, Any]:
     return run
 
 
+@app.post("/runs/{run_id}/events-token")
+def create_run_events_token(request: Request, run_id: str) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/runs/{run_id}/events-token")
+    if not db.get_run(run_id):
+        raise HTTPException(status_code=404, detail="Run not found")
+    token, ttl = _issue_stream_token(run_id=run_id)
+    return {"run_id": run_id, "stream_token": token, "expires_in_sec": ttl}
+
+
 @app.get("/runs/{run_id}/events")
 async def run_events(
     run_id: str,
     request: Request,
     after: int = Query(default=0, ge=0),
+    stream_token: str = Query(default="", min_length=0, max_length=128),
 ) -> StreamingResponse:
     """Server-Sent Events stream for run progress.
 
     Day 3: in-process SSE; assumes a single server process (OK for Kaggle demo).
     """
 
-    _enforce_data_controls(request, endpoint="/runs/{run_id}/events")
+    if not _is_valid_stream_token(run_id=run_id, token=stream_token):
+        _enforce_data_controls(request, endpoint="/runs/{run_id}/events")
 
     async def event_iter() -> Any:
         # Use Last-Event-ID for seamless browser reconnects.
