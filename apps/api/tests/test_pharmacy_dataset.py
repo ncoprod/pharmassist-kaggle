@@ -185,3 +185,18 @@ def test_patients_endpoints_and_run_from_visit(tmp_path, monkeypatch):
         stored = db.get_run(run["run_id"])
         assert stored is not None
         assert stored["status"] == "completed"
+
+        # Visit-based runs must keep a complete SSE timeline for A1.
+        events = db.list_events(run["run_id"])
+        step_started = [
+            e.get("data")
+            for e in events
+            if isinstance(e.get("data"), dict) and e["data"].get("type") == "step_started"
+        ]
+        step_completed = [
+            e.get("data")
+            for e in events
+            if isinstance(e.get("data"), dict) and e["data"].get("type") == "step_completed"
+        ]
+        assert any(e.get("step") == "A1_intake_extraction" for e in step_started)
+        assert any(e.get("step") == "A1_intake_extraction" for e in step_completed)

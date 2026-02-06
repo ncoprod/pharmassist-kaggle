@@ -277,52 +277,51 @@ async def run_pipeline(run_id: str) -> None:
                     },
                 )
                 await asyncio.sleep(0.05)
-                continue
-
-            try:
-                intake_extracted = extract_intake(str(ocr_text), language)
-            except PhiBoundaryError as e:
-                violations = [
-                    {
-                        "code": v.code,
-                        "severity": v.severity,
-                        "json_path": v.json_path,
-                        "message": v.message,
-                    }
-                    for v in e.violations
-                ]
-                db.update_run(run_id, status="failed_safe", policy_violations=violations)
-                emit_event(
-                    run_id,
-                    "policy_violation",
-                    {
-                        "step": step,
-                        "message": "PHI boundary triggered; stopping safely.",
-                        "ocr_len": ocr_len,
-                        "ocr_sha256_12": ocr_sha,
-                        "violations": violations,
-                        "ts": _now_iso(),
-                    },
-                )
-                emit_event(
-                    run_id,
-                    "finalized",
-                    {"message": "Run failed_safe (PHI detected).", "ts": _now_iso()},
-                )
-                _RUN_QUEUES.pop(run_id, None)
-                return
-            except Exception:
-                # Fail safe: do not leak inputs, and make sure the run finalizes cleanly.
-                db.update_run(run_id, status="failed_safe", policy_violations=[])
-                emit_event(
-                    run_id,
-                    "finalized",
-                    {"message": "Run failed_safe (A1 error).", "ts": _now_iso()},
-                )
-                _RUN_QUEUES.pop(run_id, None)
-                return
-            await asyncio.sleep(0.1)
-            artifacts["intake_extracted"] = intake_extracted
+            else:
+                try:
+                    intake_extracted = extract_intake(str(ocr_text), language)
+                except PhiBoundaryError as e:
+                    violations = [
+                        {
+                            "code": v.code,
+                            "severity": v.severity,
+                            "json_path": v.json_path,
+                            "message": v.message,
+                        }
+                        for v in e.violations
+                    ]
+                    db.update_run(run_id, status="failed_safe", policy_violations=violations)
+                    emit_event(
+                        run_id,
+                        "policy_violation",
+                        {
+                            "step": step,
+                            "message": "PHI boundary triggered; stopping safely.",
+                            "ocr_len": ocr_len,
+                            "ocr_sha256_12": ocr_sha,
+                            "violations": violations,
+                            "ts": _now_iso(),
+                        },
+                    )
+                    emit_event(
+                        run_id,
+                        "finalized",
+                        {"message": "Run failed_safe (PHI detected).", "ts": _now_iso()},
+                    )
+                    _RUN_QUEUES.pop(run_id, None)
+                    return
+                except Exception:
+                    # Fail safe: do not leak inputs, and make sure the run finalizes cleanly.
+                    db.update_run(run_id, status="failed_safe", policy_violations=[])
+                    emit_event(
+                        run_id,
+                        "finalized",
+                        {"message": "Run failed_safe (A1 error).", "ts": _now_iso()},
+                    )
+                    _RUN_QUEUES.pop(run_id, None)
+                    return
+                await asyncio.sleep(0.1)
+                artifacts["intake_extracted"] = intake_extracted
 
         elif step == "A3_triage":
             if not isinstance(intake_extracted, dict):
@@ -737,18 +736,29 @@ def dumps_sse(
 
 def _dedupe_warnings(warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    seen: set[tuple[str, str | None]] = set()
+    # Collapse repeated warnings that differ only by product SKU to avoid noisy UI/report spam.
+    by_key_idx: dict[tuple[str, str, str], int] = {}
     for w in warnings:
         if not isinstance(w, dict):
             continue
         code = str(w.get("code") or "")
-        sku = w.get("related_product_sku")
-        sku_key = sku if isinstance(sku, str) else None
-        key = (code, sku_key)
-        if key in seen:
+        severity = str(w.get("severity") or "")
+        message = str(w.get("message") or "")
+        key = (code, severity, message)
+        idx = by_key_idx.get(key)
+        if idx is None:
+            by_key_idx[key] = len(out)
+            out.append(dict(w))
             continue
-        seen.add(key)
-        out.append(w)
+
+        existing = out[idx]
+        existing_sku = existing.get("related_product_sku")
+        next_sku = w.get("related_product_sku")
+        existing_sku = existing_sku if isinstance(existing_sku, str) and existing_sku else None
+        next_sku = next_sku if isinstance(next_sku, str) and next_sku else None
+        if existing_sku != next_sku:
+            # More than one SKU maps to this warning; keep it generic.
+            existing.pop("related_product_sku", None)
     return out
 
 
