@@ -128,24 +128,53 @@ type VisitSummary = {
   presenting_problem?: string
 }
 
+type DbCell = string | number | boolean | null | string[]
+type DbRow = Record<string, DbCell>
+
+type DbPreviewPayload = {
+  schema_version: string
+  table: string
+  query: string
+  limit: number
+  count: number
+  redacted: boolean
+  columns: string[]
+  rows: DbRow[]
+}
+
+function formatDbCell(value: DbCell): string {
+  if (Array.isArray(value)) return value.join(', ')
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  if (value == null) return '—'
+  return String(value)
+}
+
 function App() {
   const apiBase = useMemo(() => {
     return import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
   }, [])
 
   const [language, setLanguage] = useState<'fr' | 'en'>('fr')
-  const [activeTab, setActiveTab] = useState<'run' | 'patients'>('run')
+  const [activeTab, setActiveTab] = useState<'run' | 'patients' | 'db'>('run')
   const [caseRef, setCaseRef] = useState('case_000042')
   const [run, setRun] = useState<Run | null>(null)
   const [events, setEvents] = useState<Array<{ id: number; data: RunEvent }>>([])
   const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
+
   const [patientQuery, setPatientQuery] = useState('')
   const [patientResults, setPatientResults] = useState<PatientSearchItem[]>([])
   const [selectedPatient, setSelectedPatient] = useState<PatientDetail | null>(null)
   const [patientVisits, setPatientVisits] = useState<VisitSummary[]>([])
   const [isPatientsLoading, setIsPatientsLoading] = useState(false)
+
+  const [dbTables, setDbTables] = useState<string[]>([])
+  const [dbTable, setDbTable] = useState('patients')
+  const [dbQuery, setDbQuery] = useState('')
+  const [dbPreview, setDbPreview] = useState<DbPreviewPayload | null>(null)
+  const [isDbLoading, setIsDbLoading] = useState(false)
+
   const esRef = useRef<EventSource | null>(null)
   const seenIdsRef = useRef<Set<number>>(new Set())
 
@@ -168,7 +197,6 @@ function App() {
   }, [followUpAnswers, followUpQuestions])
 
   useEffect(() => {
-    // Pre-fill on reruns; also clears stale answers when the run_id changes.
     const next: Record<string, string> = {}
     for (const a of run?.input?.follow_up_answers ?? EMPTY_FOLLOW_UP_ANSWERS) {
       if (a?.question_id) next[a.question_id] = a.answer ?? ''
@@ -185,7 +213,6 @@ function App() {
     const testId = `follow-up-answer-${q.question_id}`
 
     function labelForChoice(choice: string): string {
-      // Default label is the raw choice code.
       if (runLanguage === 'fr') {
         if (choice === 'mild') return 'Leger'
         if (choice === 'moderate') return 'Modere'
@@ -213,7 +240,6 @@ function App() {
                           : choice
         }
 
-        // EN: keep short, human-readable labels.
         return choice === 'allergy_ent'
           ? 'Allergy / ENT'
           : choice === 'digestive'
@@ -329,7 +355,6 @@ function App() {
       const r = (await resp.json()) as Run
       setRun(r)
 
-      // Subscribe to SSE.
       esRef.current?.close()
       const es = new EventSource(`${apiBase}/runs/${r.run_id}/events`)
       esRef.current = es
@@ -348,21 +373,17 @@ function App() {
       }
 
       es.addEventListener('step_started', (evt) => {
-        const e = evt as MessageEvent<string>
-        pushEvent(e)
+        pushEvent(evt as MessageEvent<string>)
       })
       es.addEventListener('step_completed', (evt) => {
-        const e = evt as MessageEvent<string>
-        pushEvent(e)
+        pushEvent(evt as MessageEvent<string>)
       })
       es.addEventListener('finalized', async (evt) => {
-        const e = evt as MessageEvent<string>
-        pushEvent(e)
+        pushEvent(evt as MessageEvent<string>)
 
         es.close()
         esRef.current = null
 
-        // Refresh run details (artifacts).
         try {
           const runResp = await fetch(`${apiBase}/runs/${r.run_id}`)
           if (runResp.ok) setRun((await runResp.json()) as Run)
@@ -372,7 +393,6 @@ function App() {
       })
 
       es.onerror = () => {
-        // Avoid spamming errors; user can retry.
         setError(`SSE connection error (API: ${apiBase}).`)
       }
     } catch {
@@ -460,6 +480,56 @@ function App() {
     await startRun({ patient_ref: patientRef, visit_ref: visitRef })
   }
 
+  async function loadDbTables() {
+    setError(null)
+    try {
+      const resp = await fetch(`${apiBase}/admin/db-preview/tables`)
+      if (!resp.ok) {
+        setError(`Failed to list DB tables (${resp.status}).`)
+        return
+      }
+      const data = (await resp.json()) as { tables?: string[] }
+      const tables = Array.isArray(data.tables) ? data.tables : []
+      setDbTables(tables)
+      if (tables.length > 0 && !tables.includes(dbTable)) setDbTable(tables[0])
+    } catch {
+      setError(`Cannot reach API at ${apiBase}.`)
+    }
+  }
+
+  async function loadDbPreview() {
+    setError(null)
+    setIsDbLoading(true)
+    try {
+      const params = new URLSearchParams({ table: dbTable, limit: '50' })
+      if (dbQuery.trim()) params.set('query', dbQuery.trim())
+      const resp = await fetch(`${apiBase}/admin/db-preview?${params.toString()}`)
+      if (!resp.ok) {
+        setError(`Failed to load DB preview (${resp.status}).`)
+        return
+      }
+      const data = (await resp.json()) as DbPreviewPayload
+      setDbPreview(data)
+    } catch {
+      setError(`Cannot reach API at ${apiBase}.`)
+    } finally {
+      setIsDbLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'db') return
+    if (dbTables.length === 0) {
+      void loadDbTables().then(() => {
+        void loadDbPreview()
+      })
+      return
+    }
+    void loadDbPreview()
+    // intentionally reload preview when tab becomes active
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
   return (
     <>
       <div className="app">
@@ -467,7 +537,7 @@ function App() {
           <div>
             <div className="title">PharmAssist AI — Kaggle Demo</div>
             <div className="subtitle">
-              Feb 6: Patients + pharmacy-year dataset (synthetic-only, no PHI)
+              Feb 7: Patients + DB viewer + pharmacy-year dataset (synthetic-only, no PHI)
             </div>
           </div>
           <div className="controls">
@@ -485,6 +555,13 @@ function App() {
                 data-testid="tab-patients"
               >
                 Patients
+              </button>
+              <button
+                className={`tab ${activeTab === 'db' ? 'tabActive' : ''}`}
+                onClick={() => setActiveTab('db')}
+                data-testid="tab-db"
+              >
+                DB
               </button>
             </div>
             <label>
@@ -616,276 +693,330 @@ function App() {
               )}
             </section>
           </main>
+        ) : activeTab === 'db' ? (
+          <main className="grid">
+            <section className="panel">
+              <div className="panelTitle">DB Viewer (Read-only, redacted)</div>
+              <div className="row">
+                <label>
+                  Table
+                  <select
+                    value={dbTable}
+                    onChange={(e) => setDbTable(e.target.value)}
+                    data-testid="db-table-select"
+                  >
+                    {dbTables.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Query
+                  <input
+                    value={dbQuery}
+                    onChange={(e) => setDbQuery(e.target.value)}
+                    placeholder="prefix..."
+                    data-testid="db-query-input"
+                  />
+                </label>
+                <button
+                  className="printBtn"
+                  onClick={() => void loadDbPreview()}
+                  disabled={isDbLoading}
+                  data-testid="db-load-btn"
+                >
+                  {isDbLoading ? 'Loading…' : 'Load'}
+                </button>
+              </div>
+              <div className="muted">
+                Redacted preview only. No raw OCR/PDF text and no PHI payloads are exposed.
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panelTitleRow">
+                <div className="panelTitle">Rows</div>
+                <div className="muted small" data-testid="db-preview-count">
+                  {dbPreview ? `${dbPreview.table}: ${dbPreview.rows.length}/${dbPreview.count}` : '—'}
+                </div>
+              </div>
+              {!dbPreview || dbPreview.rows.length === 0 ? (
+                <div className="muted">No rows.</div>
+              ) : (
+                <div className="dbTableWrap">
+                  <table className="dbTable" data-testid="db-table-grid">
+                    <thead>
+                      <tr>
+                        {dbPreview.columns.map((c) => (
+                          <th key={c}>{c}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dbPreview.rows.map((r, idx) => (
+                        <tr key={`${dbPreview.table}-${idx}`} data-testid="db-row">
+                          {dbPreview.columns.map((c) => (
+                            <td key={`${idx}-${c}`} className="mono small">
+                              {formatDbCell((r[c] ?? null) as DbCell)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </main>
         ) : (
           <main className="grid">
-          <section className="panel">
-            <div className="panelTitle">Run</div>
-            {run ? (
-              <div className="kv">
-                <div>
-                  <span className="k">run_id</span>
-                  <span className="v mono" data-testid="run-id">
-                    {run.run_id}
-                  </span>
+            <section className="panel">
+              <div className="panelTitle">Run</div>
+              {run ? (
+                <div className="kv">
+                  <div>
+                    <span className="k">run_id</span>
+                    <span className="v mono" data-testid="run-id">
+                      {run.run_id}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="k">status</span>
+                    <span className="v" data-testid="run-status">
+                      {run.status}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="k">created_at</span>
+                    <span className="v mono">{run.created_at}</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="k">status</span>
-                  <span className="v" data-testid="run-status">
-                    {run.status}
-                  </span>
-                </div>
-                <div>
-                  <span className="k">created_at</span>
-                  <span className="v mono">{run.created_at}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="muted">No run yet.</div>
-            )}
-          </section>
-
-          <section className="panel">
-            <div className="panelTitle">Progress Events (SSE)</div>
-            <div className="events">
-              {events.length === 0 ? (
-                <div className="muted">Start a run to see live events.</div>
               ) : (
-                events.map((e) => (
-                  <div key={e.id} className="event">
-                    <div className="eventTop">
-                      <span className="badge">{e.data.type}</span>
-                      <span className="mono small">{e.data.ts ?? ''}</span>
-                    </div>
-                    <div className="eventMsg">
-                      {e.data.step ? <span className="mono">{e.data.step}: </span> : null}
-                      {e.data.message ?? ''}
-                    </div>
-                  </div>
-                ))
+                <div className="muted">No run yet.</div>
               )}
-            </div>
-          </section>
+            </section>
 
-          <section className="panel" data-testid="follow-up-panel">
-            <div className="panelTitle">Follow-up</div>
-            {!run ? (
-              <div className="muted">No run yet.</div>
-            ) : followUpQuestions.length === 0 ? (
-              <div className="muted">No follow-up questions.</div>
-            ) : (
-              <>
-                {needsMoreInfo ? (
-                  <div className="callout" data-testid="needs-more-info">
-                    {runLanguage === 'fr'
-                      ? 'Informations manquantes : repondez aux questions pour continuer.'
-                      : 'This run needs more information to proceed.'}
-                  </div>
-                ) : null}
-
-                <div className="followupList">
-                  {followUpQuestions.map((q) => (
-                    <div
-                      key={q.question_id}
-                      className="qCard"
-                      data-testid={`follow-up-q-${q.question_id}`}
-                    >
-                      <div className="qHeader">
-                        <div className="qText">{q.question}</div>
-                        {typeof q.priority === 'number' ? (
-                          <span className="qPrio">P{q.priority}</span>
-                        ) : null}
+            <section className="panel">
+              <div className="panelTitle">Progress Events (SSE)</div>
+              <div className="events">
+                {events.length === 0 ? (
+                  <div className="muted">Start a run to see live events.</div>
+                ) : (
+                  events.map((e) => (
+                    <div key={e.id} className="event">
+                      <div className="eventTop">
+                        <span className="badge">{e.data.type}</span>
+                        <span className="mono small">{e.data.ts ?? ''}</span>
                       </div>
-                      {q.reason ? <div className="qReason">{q.reason}</div> : null}
-                      <div className="qInput">{renderFollowUpInput(q)}</div>
+                      <div className="eventMsg">
+                        {e.data.step ? <span className="mono">{e.data.step}: </span> : null}
+                        {e.data.message ?? ''}
+                      </div>
                     </div>
-                  ))}
-                </div>
-
-                {needsMoreInfo ? (
-                  <div className="followupActions">
-                    <button
-                      onClick={rerunWithFollowUpAnswers}
-                      disabled={isStarting || missingFollowUpCount > 0}
-                      data-testid="follow-up-rerun"
-                    >
-                      {isStarting
-                        ? runLanguage === 'fr'
-                          ? 'Demarrage...'
-                          : 'Starting...'
-                        : runLanguage === 'fr'
-                          ? 'Relancer avec reponses'
-                          : 'Re-run with answers'}
-                    </button>
-                    {missingFollowUpCount > 0 ? (
-                      <div className="muted small">
-                        {runLanguage === 'fr'
-                          ? `Reponse(s) manquante(s) : ${missingFollowUpCount}.`
-                          : `Missing ${missingFollowUpCount} answer(s).`}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            )}
-          </section>
-
-          <section className="panel" data-testid="recommendation-panel">
-            <div className="panelTitle">Recommendation</div>
-            {!run ? (
-              <div className="muted">No run yet.</div>
-            ) : needsMoreInfo ? (
-              <div className="muted">
-                {runLanguage === 'fr'
-                  ? 'Completez les questions de suivi pour afficher des recommandations.'
-                  : 'Complete follow-up questions to show recommendations.'}
+                  ))
+                )}
               </div>
-            ) : (
-              <>
-                {escalation?.recommended ? (
-                  <div className="callout">
-                    <div className="qText">
-                      {runLanguage === 'fr' ? 'Escalade recommandee' : 'Escalation recommended'}
-                    </div>
-                    <div className="qReason">{escalation.reason}</div>
-                    <div className="muted small">{escalation.suggested_service}</div>
-                  </div>
-                ) : null}
+            </section>
 
-                <div className="subTitle">
-                  {runLanguage === 'fr' ? 'Alertes de securite' : 'Safety warnings'}
-                </div>
-                {safetyWarnings.length === 0 ? (
-                  <div className="muted small">—</div>
-                ) : (
-                  <div className="warningList">
-                    {safetyWarnings.map((w, idx) => (
-                      <div key={`${w.code}-${w.related_product_sku ?? ''}-${idx}`} className="warning">
-                        <span
-                          className={
-                            w.severity === 'BLOCKER' ? 'sev sevBlocker' : 'sev sevWarn'
-                          }
-                        >
-                          {w.severity}
-                        </span>
-                        <span className="warningMsg">
-                          {w.message}
-                          {w.related_product_sku ? ` (${w.related_product_sku})` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="subTitle">
-                  {runLanguage === 'fr' ? 'Top produits' : 'Top products'}
-                </div>
-                {rankedProducts.length === 0 ? (
-                  <div className="muted small">—</div>
-                ) : (
-                  <div className="productList">
-                    {rankedProducts.map((p) => (
-                      <div key={p.product_sku} className="productCard">
-                        <div className="productTop">
-                          <span className="mono">{p.product_sku}</span>
-                          <span className="score">{p.score_0_100}</span>
-                        </div>
-                        <div className="productWhy">{p.why}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="subTitle">
-                  {runLanguage === 'fr' ? 'Sources (offline corpus)' : 'Sources (offline corpus)'}
-                </div>
-                {evidenceItems.length === 0 ? (
-                  <div className="muted small">—</div>
-                ) : (
-                  <div className="evidenceList">
-                    {evidenceItems.map((ev) => (
-                      <a
-                        key={ev.evidence_id}
-                        className="evidenceItem"
-                        href={ev.url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <div className="evidenceTop">
-                          <span className="evidenceTitle">{ev.title}</span>
-                          <span className="mono small">{ev.evidence_id}</span>
-                        </div>
-                        <div className="muted small">{ev.publisher}</div>
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                {trace?.events?.length ? (
-                  <details className="auditDetails">
-                    <summary className="auditSummary">
+            <section className="panel" data-testid="follow-up-panel">
+              <div className="panelTitle">Follow-up</div>
+              {!run ? (
+                <div className="muted">No run yet.</div>
+              ) : followUpQuestions.length === 0 ? (
+                <div className="muted">No follow-up questions.</div>
+              ) : (
+                <>
+                  {needsMoreInfo ? (
+                    <div className="callout" data-testid="needs-more-info">
                       {runLanguage === 'fr'
-                        ? 'Audit (trace redactee)'
-                        : 'Audit (redacted trace)'}
-                      <span className="muted small mono">
-                        {' '}
-                        {trace.events.length} events
-                      </span>
-                    </summary>
-                    <div className="auditList">
-                      {trace.events.map((e, idx) => (
-                        <div key={`${e.type}-${idx}`} className="auditEvent">
-                          <div className="auditTop">
-                            <span className="badge">{e.type}</span>
-                            <span className="muted small mono">
-                              {e.step ? `${e.step} · ` : ''}
-                              {e.ts ?? ''}
-                            </span>
-                          </div>
-                          {e.rule_id ? (
-                            <div className="muted small mono">rule: {e.rule_id}</div>
-                          ) : null}
-                          {e.tool_name ? (
-                            <div className="muted small mono">tool: {e.tool_name}</div>
-                          ) : null}
-                          {e.result_summary ? (
-                            <div className="muted small">{e.result_summary}</div>
-                          ) : null}
-                          {e.violation ? (
-                            <div className="muted small">
-                              {e.violation.severity}: {e.violation.code} @ {e.violation.json_path}
-                            </div>
-                          ) : null}
-                          {e.message ? <div className="auditMsg">{e.message}</div> : null}
+                        ? 'Informations manquantes : repondez aux questions pour continuer.'
+                        : 'This run needs more information to proceed.'}
+                    </div>
+                  ) : null}
+
+                  <div className="followupList">
+                    {followUpQuestions.map((q) => (
+                      <div
+                        key={q.question_id}
+                        className="qCard"
+                        data-testid={`follow-up-q-${q.question_id}`}
+                      >
+                        <div className="qHeader">
+                          <div className="qText">{q.question}</div>
+                          {typeof q.priority === 'number' ? <span className="qPrio">P{q.priority}</span> : null}
+                        </div>
+                        {q.reason ? <div className="qReason">{q.reason}</div> : null}
+                        <div className="qInput">{renderFollowUpInput(q)}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {needsMoreInfo ? (
+                    <div className="followupActions">
+                      <button
+                        onClick={rerunWithFollowUpAnswers}
+                        disabled={isStarting || missingFollowUpCount > 0}
+                        data-testid="follow-up-rerun"
+                      >
+                        {isStarting
+                          ? runLanguage === 'fr'
+                            ? 'Demarrage...'
+                            : 'Starting...'
+                          : runLanguage === 'fr'
+                            ? 'Relancer avec reponses'
+                            : 'Re-run with answers'}
+                      </button>
+                      {missingFollowUpCount > 0 ? (
+                        <div className="muted small">
+                          {runLanguage === 'fr'
+                            ? `Reponse(s) manquante(s) : ${missingFollowUpCount}.`
+                            : `Missing ${missingFollowUpCount} answer(s).`}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </section>
+
+            <section className="panel" data-testid="recommendation-panel">
+              <div className="panelTitle">Recommendation</div>
+              {!run ? (
+                <div className="muted">No run yet.</div>
+              ) : needsMoreInfo ? (
+                <div className="muted">
+                  {runLanguage === 'fr'
+                    ? 'Completez les questions de suivi pour afficher des recommandations.'
+                    : 'Complete follow-up questions to show recommendations.'}
+                </div>
+              ) : (
+                <>
+                  {escalation?.recommended ? (
+                    <div className="callout">
+                      <div className="qText">
+                        {runLanguage === 'fr' ? 'Escalade recommandee' : 'Escalation recommended'}
+                      </div>
+                      <div className="qReason">{escalation.reason}</div>
+                      <div className="muted small">{escalation.suggested_service}</div>
+                    </div>
+                  ) : null}
+
+                  <div className="subTitle">{runLanguage === 'fr' ? 'Alertes de securite' : 'Safety warnings'}</div>
+                  {safetyWarnings.length === 0 ? (
+                    <div className="muted small">—</div>
+                  ) : (
+                    <div className="warningList">
+                      {safetyWarnings.map((w, idx) => (
+                        <div key={`${w.code}-${w.related_product_sku ?? ''}-${idx}`} className="warning">
+                          <span className={w.severity === 'BLOCKER' ? 'sev sevBlocker' : 'sev sevWarn'}>
+                            {w.severity}
+                          </span>
+                          <span className="warningMsg">
+                            {w.message}
+                            {w.related_product_sku ? ` (${w.related_product_sku})` : ''}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  </details>
-                ) : null}
-              </>
-            )}
-          </section>
+                  )}
 
-          <section className="panel printPanel">
-            <div className="panelTitleRow">
-              <div className="panelTitle">Artifacts</div>
-              <button
-                className="printBtn"
-                onClick={() => window.print()}
-                disabled={!run || run.status !== 'completed'}
-                data-testid="print"
-              >
-                {runLanguage === 'fr' ? 'Imprimer' : 'Print'}
-              </button>
-            </div>
-            <div className="artifact">
-              <div className="artifactTitle">Report</div>
-              <pre className="mono pre">{run?.artifacts?.report_markdown ?? '—'}</pre>
-            </div>
-            <div className="artifact">
-              <div className="artifactTitle">Handout</div>
-              <pre className="mono pre">{run?.artifacts?.handout_markdown ?? '—'}</pre>
-            </div>
-          </section>
+                  <div className="subTitle">{runLanguage === 'fr' ? 'Top produits' : 'Top products'}</div>
+                  {rankedProducts.length === 0 ? (
+                    <div className="muted small">—</div>
+                  ) : (
+                    <div className="productList">
+                      {rankedProducts.map((p) => (
+                        <div key={p.product_sku} className="productCard">
+                          <div className="productTop">
+                            <span className="mono">{p.product_sku}</span>
+                            <span className="score">{p.score_0_100}</span>
+                          </div>
+                          <div className="productWhy">{p.why}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="subTitle">{runLanguage === 'fr' ? 'Sources (offline corpus)' : 'Sources (offline corpus)'}</div>
+                  {evidenceItems.length === 0 ? (
+                    <div className="muted small">—</div>
+                  ) : (
+                    <div className="evidenceList">
+                      {evidenceItems.map((ev) => (
+                        <a
+                          key={ev.evidence_id}
+                          className="evidenceItem"
+                          href={ev.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <div className="evidenceTop">
+                            <span className="evidenceTitle">{ev.title}</span>
+                            <span className="mono small">{ev.evidence_id}</span>
+                          </div>
+                          <div className="muted small">{ev.publisher}</div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {trace?.events?.length ? (
+                    <details className="auditDetails">
+                      <summary className="auditSummary">
+                        {runLanguage === 'fr' ? 'Audit (trace redactee)' : 'Audit (redacted trace)'}
+                        <span className="muted small mono"> {trace.events.length} events</span>
+                      </summary>
+                      <div className="auditList">
+                        {trace.events.map((e, idx) => (
+                          <div key={`${e.type}-${idx}`} className="auditEvent">
+                            <div className="auditTop">
+                              <span className="badge">{e.type}</span>
+                              <span className="muted small mono">
+                                {e.step ? `${e.step} · ` : ''}
+                                {e.ts ?? ''}
+                              </span>
+                            </div>
+                            {e.rule_id ? <div className="muted small mono">rule: {e.rule_id}</div> : null}
+                            {e.tool_name ? <div className="muted small mono">tool: {e.tool_name}</div> : null}
+                            {e.result_summary ? <div className="muted small">{e.result_summary}</div> : null}
+                            {e.violation ? (
+                              <div className="muted small">
+                                {e.violation.severity}: {e.violation.code} @ {e.violation.json_path}
+                              </div>
+                            ) : null}
+                            {e.message ? <div className="auditMsg">{e.message}</div> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
+                </>
+              )}
+            </section>
+
+            <section className="panel printPanel">
+              <div className="panelTitleRow">
+                <div className="panelTitle">Artifacts</div>
+                <button
+                  className="printBtn"
+                  onClick={() => window.print()}
+                  disabled={!run || run.status !== 'completed'}
+                  data-testid="print"
+                >
+                  {runLanguage === 'fr' ? 'Imprimer' : 'Print'}
+                </button>
+              </div>
+              <div className="artifact">
+                <div className="artifactTitle">Report</div>
+                <pre className="mono pre">{run?.artifacts?.report_markdown ?? '—'}</pre>
+              </div>
+              <div className="artifact">
+                <div className="artifactTitle">Handout</div>
+                <pre className="mono pre">{run?.artifacts?.handout_markdown ?? '—'}</pre>
+              </div>
+            </section>
           </main>
         )}
       </div>

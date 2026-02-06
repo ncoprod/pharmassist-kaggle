@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.0.0",
+  "table": "patients",
+  "query": "pt_0000",
+  "limit": 20,
+  "count": 2,
+  "redacted": true,
+  "columns": [
+    "patient_ref",
+    "age_years",
+    "sex",
+    "allergies_count",
+    "conditions_count",
+    "current_medications_count"
+  ],
+  "rows": [
+    {
+      "patient_ref": "pt_000000",
+      "age_years": 37,
+      "sex": "F",
+      "allergies_count": 0,
+      "conditions_count": 1,
+      "current_medications_count": 2
+    }
+  ]
+}

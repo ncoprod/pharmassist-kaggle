@@ -28,10 +28,16 @@ Endpoints:
 - `GET /patients?query=pt_0000`
 - `GET /patients/{patient_ref}`
 - `GET /patients/{patient_ref}/visits`
+- `GET /admin/db-preview/tables`
+- `GET /admin/db-preview?table=patients&query=pt_0000&limit=50`
 
 Run creation:
 - `POST /runs` accepts `visit_ref` (+ optional `patient_ref`) and resolves a case bundle from the dataset
   **without any PHI** (no OCR/PDF text stored).
+
+DB viewer:
+- Read-only and redacted by design.
+- Returns compact table previews only (no raw OCR/PDF text, no free-form payload blobs).
 
 To use a larger dataset, download it locally and point:
 - `PHARMASSIST_PHARMACY_DATA_DIR=/path/to/dataset_dir` (must contain `patients.jsonl.gz`, `visits.jsonl.gz`, `events.jsonl.gz`, `inventory.jsonl.gz`)

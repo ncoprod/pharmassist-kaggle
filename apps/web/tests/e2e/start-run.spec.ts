@@ -115,3 +115,14 @@ test('patients flow: search -> open -> start run from visit', async ({ page }) =
   await expect(runStatus).not.toHaveText('created')
   await expect(runStatus).toHaveText('completed')
 })
+
+test('db viewer loads redacted rows', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTestId('tab-db').click()
+  await page.getByTestId('db-table-select').selectOption('patients')
+  await page.getByTestId('db-load-btn').click()
+
+  await expect(page.getByTestId('db-preview-count')).toBeVisible()
+  await expect(page.locator('[data-testid="db-row"]').first()).toBeVisible()
+})

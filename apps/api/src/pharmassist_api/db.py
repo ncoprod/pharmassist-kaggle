@@ -548,3 +548,442 @@ def count_inventory() -> int:
     with _connect() as conn:
         row = conn.execute("SELECT COUNT(1) AS c FROM inventory").fetchone()
         return int(row["c"]) if row else 0
+
+
+_DB_PREVIEW_TABLES = (
+    "runs",
+    "run_events",
+    "patients",
+    "visits",
+    "events",
+    "inventory",
+    "documents",
+)
+_DB_PREVIEW_LIMIT_MAX = 100
+
+
+def _json_load_object(raw: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw)
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _json_load_list(raw: str) -> list[Any]:
+    try:
+        value = json.loads(raw)
+    except Exception:
+        return []
+    return value if isinstance(value, list) else []
+
+
+def list_db_preview_tables() -> list[str]:
+    return list(_DB_PREVIEW_TABLES)
+
+
+def preview_db_table(*, table: str, query: str = "", limit: int = 50) -> dict[str, Any]:
+    table_norm = (table or "").strip().lower()
+    if table_norm not in _DB_PREVIEW_TABLES:
+        raise ValueError(f"Unsupported table for preview: {table_norm}")
+
+    query_norm = (query or "").strip()
+    limit_norm = max(1, min(int(limit), _DB_PREVIEW_LIMIT_MAX))
+
+    with _connect() as conn:
+        if table_norm == "runs":
+            columns, rows, count = _preview_runs(conn, query_norm, limit_norm)
+        elif table_norm == "run_events":
+            columns, rows, count = _preview_run_events(conn, query_norm, limit_norm)
+        elif table_norm == "patients":
+            columns, rows, count = _preview_patients(conn, query_norm, limit_norm)
+        elif table_norm == "visits":
+            columns, rows, count = _preview_visits(conn, query_norm, limit_norm)
+        elif table_norm == "events":
+            columns, rows, count = _preview_events(conn, query_norm, limit_norm)
+        elif table_norm == "inventory":
+            columns, rows, count = _preview_inventory(conn, query_norm, limit_norm)
+        else:
+            columns, rows, count = _preview_documents(conn, query_norm, limit_norm)
+
+    return {
+        "schema_version": "0.0.0",
+        "table": table_norm,
+        "query": query_norm,
+        "limit": limit_norm,
+        "count": int(count),
+        "redacted": True,
+        "columns": columns,
+        "rows": rows,
+    }
+
+
+def _preview_runs(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE run_id LIKE ?"
+        params = (f"{query}%",)
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM runs {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT run_id, created_at, status, input_json, artifacts_json, policy_violations_json
+        FROM runs
+        {where}
+        ORDER BY created_at DESC, run_id DESC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        input_obj = _json_load_object(row["input_json"])
+        artifacts_obj = _json_load_object(row["artifacts_json"])
+        policy_violations = _json_load_list(row["policy_violations_json"])
+        recommendation = artifacts_obj.get("recommendation")
+        follow_up_questions = (
+            recommendation.get("follow_up_questions")
+            if isinstance(recommendation, dict)
+            else []
+        )
+        out.append(
+            {
+                "run_id": row["run_id"],
+                "created_at": row["created_at"],
+                "status": row["status"],
+                "language": str(input_obj.get("language") or ""),
+                "case_ref": str(input_obj.get("case_ref") or ""),
+                "patient_ref": str(input_obj.get("patient_ref") or ""),
+                "visit_ref": str(input_obj.get("visit_ref") or ""),
+                "follow_up_questions_count": len(follow_up_questions)
+                if isinstance(follow_up_questions, list)
+                else 0,
+                "has_report": isinstance(artifacts_obj.get("report_markdown"), str),
+                "has_handout": isinstance(artifacts_obj.get("handout_markdown"), str),
+                "has_trace": isinstance(artifacts_obj.get("trace"), dict),
+                "policy_violations_count": len(policy_violations),
+            }
+        )
+
+    return (
+        [
+            "run_id",
+            "created_at",
+            "status",
+            "language",
+            "case_ref",
+            "patient_ref",
+            "visit_ref",
+            "follow_up_questions_count",
+            "has_report",
+            "has_handout",
+            "has_trace",
+            "policy_violations_count",
+        ],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_run_events(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE run_id LIKE ? OR type LIKE ?"
+        params = (f"{query}%", f"{query}%")
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM run_events {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT id, run_id, ts, type, data_json
+        FROM run_events
+        {where}
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        data = _json_load_object(row["data_json"])
+        out.append(
+            {
+                "id": int(row["id"]),
+                "run_id": row["run_id"],
+                "ts": row["ts"],
+                "type": row["type"],
+                "step": str(data.get("step") or ""),
+                "message": str(data.get("message") or ""),
+                "tool_name": str(data.get("tool_name") or ""),
+                "result_summary": str(data.get("result_summary") or ""),
+                "rule_id": str(data.get("rule_id") or ""),
+                "severity": str(data.get("severity") or ""),
+            }
+        )
+
+    return (
+        [
+            "id",
+            "run_id",
+            "ts",
+            "type",
+            "step",
+            "message",
+            "tool_name",
+            "result_summary",
+            "rule_id",
+            "severity",
+        ],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_patients(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE patient_ref LIKE ?"
+        params = (f"{query}%",)
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM patients {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT patient_ref, llm_context_json
+        FROM patients
+        {where}
+        ORDER BY patient_ref ASC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        llm_context = _json_load_object(row["llm_context_json"])
+        demo = llm_context.get("demographics") if isinstance(llm_context, dict) else {}
+        allergies = llm_context.get("allergies") if isinstance(llm_context, dict) else []
+        conditions = llm_context.get("conditions") if isinstance(llm_context, dict) else []
+        current_meds = (
+            llm_context.get("current_medications") if isinstance(llm_context, dict) else []
+        )
+        out.append(
+            {
+                "patient_ref": row["patient_ref"],
+                "age_years": int(demo.get("age_years"))
+                if isinstance(demo, dict) and isinstance(demo.get("age_years"), int)
+                else None,
+                "sex": str(demo.get("sex") or "") if isinstance(demo, dict) else "",
+                "allergies_count": len(allergies) if isinstance(allergies, list) else 0,
+                "conditions_count": len(conditions) if isinstance(conditions, list) else 0,
+                "current_medications_count": len(current_meds)
+                if isinstance(current_meds, list)
+                else 0,
+            }
+        )
+
+    return (
+        [
+            "patient_ref",
+            "age_years",
+            "sex",
+            "allergies_count",
+            "conditions_count",
+            "current_medications_count",
+        ],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_visits(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE visit_ref LIKE ? OR patient_ref LIKE ?"
+        params = (f"{query}%", f"{query}%")
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM visits {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT
+            visit_ref,
+            patient_ref,
+            occurred_at,
+            primary_domain,
+            intents_json,
+            intake_extracted_json
+        FROM visits
+        {where}
+        ORDER BY occurred_at DESC, visit_ref DESC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        intents = _json_load_list(row["intents_json"])
+        intake = _json_load_object(row["intake_extracted_json"])
+        presenting_problem = intake.get("presenting_problem")
+        out.append(
+            {
+                "visit_ref": row["visit_ref"],
+                "patient_ref": row["patient_ref"],
+                "occurred_at": row["occurred_at"],
+                "primary_domain": row["primary_domain"] or "",
+                "intents_count": len(intents),
+                "presenting_problem": presenting_problem
+                if isinstance(presenting_problem, str)
+                else "",
+            }
+        )
+
+    return (
+        [
+            "visit_ref",
+            "patient_ref",
+            "occurred_at",
+            "primary_domain",
+            "intents_count",
+            "presenting_problem",
+        ],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_events(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = (
+            "WHERE event_ref LIKE ? OR visit_ref LIKE ? OR "
+            "patient_ref LIKE ? OR event_type LIKE ?"
+        )
+        params = (f"{query}%", f"{query}%", f"{query}%", f"{query}%")
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM events {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT event_ref, visit_ref, patient_ref, occurred_at, event_type, payload_json
+        FROM events
+        {where}
+        ORDER BY occurred_at DESC, event_ref DESC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        payload = _json_load_object(row["payload_json"])
+        payload_keys = sorted([k for k in payload.keys() if isinstance(k, str)])[:20]
+        out.append(
+            {
+                "event_ref": row["event_ref"],
+                "visit_ref": row["visit_ref"],
+                "patient_ref": row["patient_ref"],
+                "occurred_at": row["occurred_at"],
+                "event_type": row["event_type"],
+                "payload_keys": payload_keys,
+            }
+        )
+
+    return (
+        ["event_ref", "visit_ref", "patient_ref", "occurred_at", "event_type", "payload_keys"],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_inventory(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE sku LIKE ?"
+        params = (f"{query}%",)
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM inventory {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT sku, product_json
+        FROM inventory
+        {where}
+        ORDER BY sku ASC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        product = _json_load_object(row["product_json"])
+        out.append(
+            {
+                "sku": row["sku"],
+                "category": str(product.get("category") or ""),
+                "in_stock": bool(product.get("in_stock")),
+                "stock_qty": int(product.get("stock_qty"))
+                if isinstance(product.get("stock_qty"), int)
+                else 0,
+                "price_eur": float(product.get("price_eur"))
+                if isinstance(product.get("price_eur"), int | float)
+                else None,
+            }
+        )
+
+    return (
+        ["sku", "category", "in_stock", "stock_qty", "price_eur"],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_documents(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE doc_ref LIKE ?"
+        params = (f"{query}%",)
+
+    count = conn.execute(f"SELECT COUNT(1) AS c FROM documents {where}", params).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT doc_ref, metadata_json
+        FROM documents
+        {where}
+        ORDER BY doc_ref ASC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        metadata = _json_load_object(row["metadata_json"])
+        keys = sorted([k for k in metadata.keys() if isinstance(k, str)])[:20]
+        out.append({"doc_ref": row["doc_ref"], "metadata_keys": keys})
+
+    return (
+        ["doc_ref", "metadata_keys"],
+        out,
+        int(count["c"]) if count else 0,
+    )

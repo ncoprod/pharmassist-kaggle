@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/db_preview.schema.json",
+  "title": "Redacted DB Preview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "table",
+    "query",
+    "limit",
+    "count",
+    "redacted",
+    "columns",
+    "rows"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "table": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "query": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "redacted": {
+      "type": "boolean",
+      "const": true
+    },
+    "columns": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+      }
+    },
+    "rows": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/row"
+      }
+    }
+  },
+  "$defs": {
+    "cell": {
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          }
+        }
+      ]
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/cell"
+      }
+    }
+  }
+}
