@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import os
+import secrets
+import threading
+import time
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -60,6 +66,202 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+_ADMIN_RATE_LOCK = threading.Lock()
+_ADMIN_RATE_BUCKETS: dict[str, deque[float]] = {}
+
+
+def _env_int(name: str, default: int, *, low: int, high: int) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(low, min(high, value))
+
+
+def _admin_rate_window_sec() -> int:
+    return _env_int("PHARMASSIST_ADMIN_RATE_LIMIT_WINDOW_SEC", 60, low=1, high=3600)
+
+
+def _admin_rate_max() -> int:
+    return _env_int("PHARMASSIST_ADMIN_RATE_LIMIT_MAX", 30, low=1, high=1000)
+
+
+def _admin_api_key() -> str:
+    return (os.getenv("PHARMASSIST_ADMIN_API_KEY") or "").strip()
+
+
+def _api_key() -> str:
+    return (os.getenv("PHARMASSIST_API_KEY") or "").strip()
+
+
+def _client_ip(request: Request) -> str:
+    if request.client and isinstance(request.client.host, str) and request.client.host.strip():
+        return request.client.host.strip()
+    return "unknown"
+
+
+def _is_loopback_ip(client_ip: str) -> bool:
+    ip = client_ip.strip().lower()
+    return ip in {"127.0.0.1", "::1", "localhost", "testclient"} or ip.startswith(
+        "::ffff:127.0.0.1"
+    )
+
+
+def _has_forward_headers(request: Request) -> bool:
+    return any(
+        request.headers.get(name)
+        for name in ("forwarded", "x-forwarded-for", "x-forwarded-proto", "x-forwarded-host")
+    )
+
+
+def _sha256_12(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def _consume_admin_rate_limit(endpoint: str, client_ip: str) -> bool:
+    now = time.monotonic()
+    window = float(_admin_rate_window_sec())
+    limit = int(_admin_rate_max())
+    bucket_key = f"{endpoint}|{client_ip}"
+    cutoff = now - window
+    with _ADMIN_RATE_LOCK:
+        bucket = _ADMIN_RATE_BUCKETS.setdefault(bucket_key, deque())
+        while bucket and bucket[0] <= cutoff:
+            bucket.popleft()
+        if len(bucket) >= limit:
+            return False
+        bucket.append(now)
+    return True
+
+
+def _audit_admin_access(
+    *,
+    request: Request,
+    endpoint: str,
+    action: str,
+    reason: str,
+    meta: dict[str, Any],
+) -> None:
+    try:
+        db.insert_admin_audit_event(
+            endpoint=endpoint,
+            method=request.method,
+            client_ip=_client_ip(request),
+            action=action,
+            reason=reason,
+            meta=meta,
+        )
+    except Exception:
+        # Never block the API on audit-log write failures.
+        pass
+
+
+def _enforce_admin_controls(request: Request, *, endpoint: str, meta: dict[str, Any]) -> None:
+    client_ip = _client_ip(request)
+    if not _consume_admin_rate_limit(endpoint, client_ip):
+        _audit_admin_access(
+            request=request,
+            endpoint=endpoint,
+            action="rate_limited",
+            reason="too_many_requests",
+            meta=meta,
+        )
+        raise HTTPException(status_code=429, detail="Rate limit exceeded for admin endpoint")
+
+    expected_key = _admin_api_key()
+    if expected_key:
+        provided_key = request.headers.get("x-admin-key") or ""
+        if not secrets.compare_digest(provided_key, expected_key):
+            _audit_admin_access(
+                request=request,
+                endpoint=endpoint,
+                action="deny",
+                reason="invalid_admin_key",
+                meta=meta,
+            )
+            raise HTTPException(status_code=401, detail="Admin authentication required")
+        _audit_admin_access(
+            request=request,
+            endpoint=endpoint,
+            action="allow",
+            reason="admin_key",
+            meta=meta,
+        )
+        return
+
+    if not _is_loopback_ip(client_ip):
+        _audit_admin_access(
+            request=request,
+            endpoint=endpoint,
+            action="deny",
+            reason="non_loopback_without_admin_key",
+            meta=meta,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Admin endpoints are loopback-only unless PHARMASSIST_ADMIN_API_KEY is set",
+        )
+
+    if _has_forward_headers(request):
+        _audit_admin_access(
+            request=request,
+            endpoint=endpoint,
+            action="deny",
+            reason="forwarded_headers_without_admin_key",
+            meta=meta,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Admin endpoints require PHARMASSIST_ADMIN_API_KEY behind proxy headers",
+        )
+
+    _audit_admin_access(
+        request=request,
+        endpoint=endpoint,
+        action="allow",
+        reason="loopback_dev_mode",
+        meta=meta,
+    )
+
+
+def reset_admin_guard_state_for_tests() -> None:
+    with _ADMIN_RATE_LOCK:
+        _ADMIN_RATE_BUCKETS.clear()
+
+
+def _provided_api_key(request: Request) -> str:
+    header_value = (request.headers.get("x-api-key") or "").strip()
+    if header_value:
+        return header_value
+    return (request.query_params.get("api_key") or "").strip()
+
+
+def _enforce_data_controls(request: Request, *, endpoint: str) -> None:
+    expected = _api_key()
+    if expected:
+        provided = _provided_api_key(request)
+        if not secrets.compare_digest(provided, expected):
+            raise HTTPException(status_code=401, detail=f"{endpoint}: API authentication required")
+        return
+
+    if _has_forward_headers(request):
+        detail = (
+            f"{endpoint}: loopback-only without PHARMASSIST_API_KEY "
+            "when proxy headers are present"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=detail,
+        )
+    if not _is_loopback_ip(_client_ip(request)):
+        detail = f"{endpoint}: loopback-only without PHARMASSIST_API_KEY"
+        raise HTTPException(status_code=403, detail=detail)
+
+
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
@@ -71,7 +273,8 @@ def root() -> dict[str, str]:
 
 
 @app.post("/runs")
-async def create_run(req: RunCreateRequest) -> dict[str, Any]:
+async def create_run(request: Request, req: RunCreateRequest) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/runs")
     follow_up_answers = (
         [a.model_dump() for a in req.follow_up_answers] if req.follow_up_answers else None
     )
@@ -136,7 +339,10 @@ async def create_run(req: RunCreateRequest) -> dict[str, Any]:
 
 
 @app.get("/patients")
-def search_patients(query: str = Query(default="", min_length=0, max_length=64)) -> dict[str, Any]:
+def search_patients(
+    request: Request, query: str = Query(default="", min_length=0, max_length=64)
+) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/patients")
     q = query.strip()
     if not q:
         return {"patients": []}
@@ -144,7 +350,8 @@ def search_patients(query: str = Query(default="", min_length=0, max_length=64))
 
 
 @app.get("/patients/{patient_ref}")
-def get_patient(patient_ref: str) -> dict[str, Any]:
+def get_patient(request: Request, patient_ref: str) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/patients/{patient_ref}")
     patient = db.get_patient(patient_ref)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -152,7 +359,8 @@ def get_patient(patient_ref: str) -> dict[str, Any]:
 
 
 @app.get("/patients/{patient_ref}/visits")
-def get_patient_visits(patient_ref: str) -> dict[str, Any]:
+def get_patient_visits(request: Request, patient_ref: str) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/patients/{patient_ref}/visits")
     patient = db.get_patient(patient_ref)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -163,18 +371,36 @@ def get_patient_visits(patient_ref: str) -> dict[str, Any]:
 
 
 @app.get("/admin/db-preview/tables")
-def get_db_preview_tables() -> dict[str, Any]:
+def get_db_preview_tables(request: Request) -> dict[str, Any]:
+    _enforce_admin_controls(
+        request,
+        endpoint="/admin/db-preview/tables",
+        meta={},
+    )
     return {"tables": db.list_db_preview_tables()}
 
 
 @app.get("/admin/db-preview")
 def get_db_preview(
+    request: Request,
     table: str = Query(min_length=1, max_length=32),
     query: str = Query(default="", min_length=0, max_length=64),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> dict[str, Any]:
+    query_norm = (query or "").strip()
+    table_norm = (table or "").strip().lower()
+    _enforce_admin_controls(
+        request,
+        endpoint="/admin/db-preview",
+        meta={
+            "table": table_norm,
+            "query_len": len(query_norm),
+            "query_sha256_12": _sha256_12(query_norm),
+            "limit": int(limit),
+        },
+    )
     try:
-        payload = db.preview_db_table(table=table, query=query, limit=limit)
+        payload = db.preview_db_table(table=table_norm, query=query_norm, limit=limit)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     validate_instance(payload, "db_preview")
@@ -182,7 +408,8 @@ def get_db_preview(
 
 
 @app.get("/runs/{run_id}")
-def get_run(run_id: str) -> dict[str, Any]:
+def get_run(request: Request, run_id: str) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/runs/{run_id}")
     run = db.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -199,6 +426,8 @@ async def run_events(
 
     Day 3: in-process SSE; assumes a single server process (OK for Kaggle demo).
     """
+
+    _enforce_data_controls(request, endpoint="/runs/{run_id}/events")
 
     async def event_iter() -> Any:
         # Use Last-Event-ID for seamless browser reconnects.

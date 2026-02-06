@@ -38,6 +38,14 @@ Run creation:
 DB viewer:
 - Read-only and redacted by design.
 - Returns compact table previews only (no raw OCR/PDF text, no free-form payload blobs).
+- App/API hardening:
+  - if `PHARMASSIST_API_KEY` is set, `runs` + `patients` endpoints require `X-Api-Key` (SSE accepts `?api_key=`).
+  - if `PHARMASSIST_API_KEY` is not set, these endpoints are loopback-only and reject proxy-forward headers.
+- Admin hardening:
+  - if `PHARMASSIST_ADMIN_API_KEY` is set, requests must send header `X-Admin-Key`.
+  - if `PHARMASSIST_ADMIN_API_KEY` is not set, admin endpoints are loopback-only and reject proxy-forward headers.
+  - built-in rate limiting for admin endpoints (`PHARMASSIST_ADMIN_RATE_LIMIT_MAX`, `PHARMASSIST_ADMIN_RATE_LIMIT_WINDOW_SEC`).
+  - every admin access is audit-logged in `admin_audit_events` (redacted metadata only).
 
 To use a larger dataset, download it locally and point:
 - `PHARMASSIST_PHARMACY_DATA_DIR=/path/to/dataset_dir` (must contain `patients.jsonl.gz`, `visits.jsonl.gz`, `events.jsonl.gz`, `inventory.jsonl.gz`)
@@ -66,6 +74,24 @@ API health check:
 curl http://localhost:8000/healthz
 ```
 
+Enable authenticated DB preview in local dev (recommended):
+
+```bash
+export PHARMASSIST_API_KEY='change-me'
+export PHARMASSIST_ADMIN_API_KEY='change-me'
+export PHARMASSIST_ADMIN_RATE_LIMIT_MAX=30
+export PHARMASSIST_ADMIN_RATE_LIMIT_WINDOW_SEC=60
+make api-dev
+```
+
+In the web terminal, pass matching keys:
+
+```bash
+export VITE_API_KEY='change-me'
+export VITE_ADMIN_DB_PREVIEW_KEY='change-me'
+make web-dev
+```
+
 ## Tests (must stay green)
 
 ```bash
@@ -78,6 +104,23 @@ make e2e
 
 Note: `make e2e` starts and stops the API/web servers automatically for Playwright.
 For manual UI testing, run `make api-dev` and `make web-dev` in separate terminals.
+
+## Security / Red-Team checks
+
+Runtime abuse checks (auth, allowlist, rate limit):
+
+```bash
+./scripts/redteam_check.sh
+```
+
+Static and dependency checks:
+
+```bash
+.venv/bin/python -m pip install -q pip-audit bandit
+.venv/bin/pip-audit
+.venv/bin/bandit -q -r apps/api/src -lll
+npm audit --omit=dev --audit-level=high
+```
 
 ## MedGemma / HAI-DEF smoke test (GPU recommended)
 
@@ -108,6 +151,23 @@ PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.haidef_smoke \
   --case-ref case_000042 \
   --language en \
   --max-new-tokens 256
+```
+
+### Kaggle CLI sanity checks (no GPU burn)
+
+```bash
+cd /Users/nico/Documents/AI/pharmassist-kaggle
+.venv/bin/pip install -q kaggle
+
+# Use your own Kaggle creds (or ~/.kaggle/kaggle.json)
+KAGGLE_USERNAME='YOUR_USERNAME' KAGGLE_KEY='YOUR_KEY' \
+.venv/bin/kaggle datasets status nicolascoquelet/pharmassist-pharmacy-year-paris15-2025-v1
+
+KAGGLE_USERNAME='YOUR_USERNAME' KAGGLE_KEY='YOUR_KEY' \
+.venv/bin/kaggle kernels list --user nicolascoquelet --sort-by dateCreated --page-size 20 -v
+
+KAGGLE_USERNAME='YOUR_USERNAME' KAGGLE_KEY='YOUR_KEY' \
+.venv/bin/kaggle kernels status nicolascoquelet/medgemma-nb
 ```
 
 ### Kaggle Notebook (recommended, no venv)
@@ -172,9 +232,11 @@ else:
 ```
 
 ```python
-# 6) (Optional) Follow-up selector smoke (MedGemma selects allowlisted question_ids)
+# 6) (Optional) Follow-up selector smoke (low-info case)
 #
 # This run is expected to stop in `needs_more_info` and show follow-up questions.
+# Note: if required low-info questions already fill the max budget, triage keeps
+# a rules-only set and selector attempt stays false by design.
 import os, sys
 from pathlib import Path
 
@@ -191,12 +253,15 @@ os.environ["PHARMASSIST_USE_MEDGEMMA_FOLLOWUP"] = "1"
 from pharmassist_api import db, orchestrator
 
 db.init_db()
-run = orchestrator.new_run(case_ref="case_000042", language="en", trigger="manual")
+run = orchestrator.new_run(case_ref="case_lowinfo_000102", language="en", trigger="manual")
 await orchestrator.run_pipeline(run["run_id"])
 r = db.get_run(run["run_id"])
 
 print("status:", r["status"])
-print("follow_up_question_ids:", [q["question_id"] for q in r["artifacts"]["recommendation"]["follow_up_questions"]])
+question_ids = [q["question_id"] for q in r["artifacts"]["recommendation"]["follow_up_questions"]]
+print("follow_up_question_ids:", question_ids)
+assert question_ids, "expected at least one follow-up question for low-info case"
+assert "q_primary_domain" in question_ids
 ```
 
 ```python

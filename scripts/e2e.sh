@@ -9,6 +9,8 @@ WEB_HOST="${WEB_HOST:-127.0.0.1}"
 # Use 5174 by default to ensure our API CORS config supports arbitrary Vite ports.
 WEB_PORT="${WEB_PORT:-5174}"
 API_BASE_URL="http://${API_HOST}:${API_PORT}"
+WEB_ADMIN_KEY="${WEB_ADMIN_KEY:-${PHARMASSIST_ADMIN_API_KEY:-}}"
+WEB_API_KEY="${WEB_API_KEY:-${PHARMASSIST_API_KEY:-}}"
 
 API_PID=""
 WEB_PID=""
@@ -35,7 +37,7 @@ echo "Starting API on http://${API_HOST}:${API_PORT} ..."
 API_PID="$!"
 
 echo "Starting web on http://${WEB_HOST}:${WEB_PORT} ..."
-(cd "${ROOT}" && VITE_API_BASE_URL="${API_BASE_URL}" npm -w apps/web run dev -- --host "${WEB_HOST}" --port "${WEB_PORT}" --strictPort) \
+(cd "${ROOT}" && VITE_API_BASE_URL="${API_BASE_URL}" VITE_ADMIN_DB_PREVIEW_KEY="${WEB_ADMIN_KEY}" VITE_API_KEY="${WEB_API_KEY}" npm -w apps/web run dev -- --host "${WEB_HOST}" --port "${WEB_PORT}" --strictPort) \
   >/dev/null 2>&1 &
 WEB_PID="$!"
 
