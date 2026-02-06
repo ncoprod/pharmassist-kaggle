@@ -153,6 +153,9 @@ function App() {
   const apiBase = useMemo(() => {
     return import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
   }, [])
+  const apiKey = useMemo(() => {
+    return import.meta.env.VITE_API_KEY ?? ''
+  }, [])
 
   const [language, setLanguage] = useState<'fr' | 'en'>('fr')
   const [activeTab, setActiveTab] = useState<'run' | 'patients' | 'db'>('run')
@@ -172,6 +175,7 @@ function App() {
   const [dbTables, setDbTables] = useState<string[]>([])
   const [dbTable, setDbTable] = useState('patients')
   const [dbQuery, setDbQuery] = useState('')
+  const [dbAdminKey, setDbAdminKey] = useState(() => import.meta.env.VITE_ADMIN_DB_PREVIEW_KEY ?? '')
   const [dbPreview, setDbPreview] = useState<DbPreviewPayload | null>(null)
   const [isDbLoading, setIsDbLoading] = useState(false)
 
@@ -188,6 +192,14 @@ function App() {
   const escalation = run?.artifacts?.recommendation?.escalation
   const evidenceItems = run?.artifacts?.evidence_items ?? []
   const trace = run?.artifacts?.trace
+
+  function buildApiHeaders(opts?: { admin?: boolean; json?: boolean }): HeadersInit {
+    const headers: HeadersInit = {}
+    if (apiKey.trim()) headers['X-Api-Key'] = apiKey.trim()
+    if (opts?.admin && dbAdminKey.trim()) headers['X-Admin-Key'] = dbAdminKey.trim()
+    if (opts?.json) headers['Content-Type'] = 'application/json'
+    return headers
+  }
 
   const missingFollowUpCount = useMemo(() => {
     return followUpQuestions.filter((q) => {
@@ -343,7 +355,7 @@ function App() {
 
       const resp = await fetch(`${apiBase}/runs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildApiHeaders({ json: true }),
         body: JSON.stringify(body),
       })
 
@@ -356,7 +368,10 @@ function App() {
       setRun(r)
 
       esRef.current?.close()
-      const es = new EventSource(`${apiBase}/runs/${r.run_id}/events`)
+      const sseParams = new URLSearchParams()
+      if (apiKey.trim()) sseParams.set('api_key', apiKey.trim())
+      const esUrl = `${apiBase}/runs/${r.run_id}/events${sseParams.toString() ? `?${sseParams.toString()}` : ''}`
+      const es = new EventSource(esUrl)
       esRef.current = es
 
       function pushEvent(evt: MessageEvent<string>) {
@@ -385,7 +400,9 @@ function App() {
         esRef.current = null
 
         try {
-          const runResp = await fetch(`${apiBase}/runs/${r.run_id}`)
+          const runResp = await fetch(`${apiBase}/runs/${r.run_id}`, {
+            headers: buildApiHeaders(),
+          })
           if (runResp.ok) setRun((await runResp.json()) as Run)
         } catch {
           // ignore refresh failure
@@ -434,7 +451,9 @@ function App() {
     setError(null)
     setIsPatientsLoading(true)
     try {
-      const resp = await fetch(`${apiBase}/patients?query=${encodeURIComponent(q)}`)
+      const resp = await fetch(`${apiBase}/patients?query=${encodeURIComponent(q)}`, {
+        headers: buildApiHeaders(),
+      })
       if (!resp.ok) {
         setError(`Failed to search patients (${resp.status}).`)
         return
@@ -453,8 +472,12 @@ function App() {
     setIsPatientsLoading(true)
     try {
       const [pResp, vResp] = await Promise.all([
-        fetch(`${apiBase}/patients/${encodeURIComponent(patientRef)}`),
-        fetch(`${apiBase}/patients/${encodeURIComponent(patientRef)}/visits`),
+        fetch(`${apiBase}/patients/${encodeURIComponent(patientRef)}`, {
+          headers: buildApiHeaders(),
+        }),
+        fetch(`${apiBase}/patients/${encodeURIComponent(patientRef)}/visits`, {
+          headers: buildApiHeaders(),
+        }),
       ])
       if (!pResp.ok) {
         setError(`Failed to load patient (${pResp.status}).`)
@@ -483,7 +506,9 @@ function App() {
   async function loadDbTables() {
     setError(null)
     try {
-      const resp = await fetch(`${apiBase}/admin/db-preview/tables`)
+      const resp = await fetch(`${apiBase}/admin/db-preview/tables`, {
+        headers: buildApiHeaders({ admin: true }),
+      })
       if (!resp.ok) {
         setError(`Failed to list DB tables (${resp.status}).`)
         return
@@ -503,7 +528,9 @@ function App() {
     try {
       const params = new URLSearchParams({ table: dbTable, limit: '50' })
       if (dbQuery.trim()) params.set('query', dbQuery.trim())
-      const resp = await fetch(`${apiBase}/admin/db-preview?${params.toString()}`)
+      const resp = await fetch(`${apiBase}/admin/db-preview?${params.toString()}`, {
+        headers: buildApiHeaders({ admin: true }),
+      })
       if (!resp.ok) {
         setError(`Failed to load DB preview (${resp.status}).`)
         return
@@ -719,6 +746,15 @@ function App() {
                     onChange={(e) => setDbQuery(e.target.value)}
                     placeholder="prefix..."
                     data-testid="db-query-input"
+                  />
+                </label>
+                <label>
+                  Admin key
+                  <input
+                    value={dbAdminKey}
+                    onChange={(e) => setDbAdminKey(e.target.value)}
+                    placeholder="optional"
+                    data-testid="db-admin-key-input"
                   />
                 </label>
                 <button

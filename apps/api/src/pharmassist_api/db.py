@@ -191,6 +191,26 @@ def init_db() -> None:
             );
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_audit_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              ts TEXT NOT NULL,
+              endpoint TEXT NOT NULL,
+              method TEXT NOT NULL,
+              client_ip TEXT NOT NULL,
+              action TEXT NOT NULL,
+              reason TEXT NOT NULL,
+              meta_json TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_admin_audit_events_ts
+            ON admin_audit_events(ts DESC, id DESC);
+            """
+        )
 
 
 def now_iso() -> str:
@@ -299,6 +319,71 @@ def list_events(run_id: str, *, after_id: int = 0) -> list[dict[str, Any]]:
     for row in rows:
         data = json.loads(row["data_json"])
         out.append({"id": int(row["id"]), "data": data})
+    return out
+
+
+def insert_admin_audit_event(
+    *,
+    endpoint: str,
+    method: str,
+    client_ip: str,
+    action: str,
+    reason: str,
+    meta: dict[str, Any] | None = None,
+) -> None:
+    payload = meta if isinstance(meta, dict) else {}
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO admin_audit_events(
+              ts,
+              endpoint,
+              method,
+              client_ip,
+              action,
+              reason,
+              meta_json
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now_iso(),
+                endpoint.strip(),
+                method.strip().upper(),
+                client_ip.strip(),
+                action.strip().lower(),
+                reason.strip().lower(),
+                json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            ),
+        )
+
+
+def list_admin_audit_events(*, limit: int = 200) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, ts, endpoint, method, client_ip, action, reason, meta_json
+            FROM admin_audit_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "id": int(row["id"]),
+                "ts": row["ts"],
+                "endpoint": row["endpoint"],
+                "method": row["method"],
+                "client_ip": row["client_ip"],
+                "action": row["action"],
+                "reason": row["reason"],
+                "meta": _json_load_object(row["meta_json"]),
+            }
+        )
     return out
 
 

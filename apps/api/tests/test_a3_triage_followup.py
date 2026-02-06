@@ -59,6 +59,48 @@ def test_followup_selector_is_not_attempted_when_no_followup_required(monkeypatc
     assert sel.get("attempted") is False
 
 
+def test_low_info_with_followup_selector_enabled_keeps_required_questions(monkeypatch):
+    monkeypatch.setenv("PHARMASSIST_USE_MEDGEMMA_FOLLOWUP", "1")
+
+    def fake_gen(*, user_content: str, system: str, max_new_tokens: int = 0):  # noqa: ARG001
+        return (
+            '{"schema_version":"0.0.0",'
+            '"question_ids":["q_primary_domain","q_overall_severity","q_fever"]}'
+        )
+
+    monkeypatch.setattr(
+        "pharmassist_api.steps.a3_followup_selector.medgemma_generate_text",
+        fake_gen,
+    )
+
+    intake = {
+        "schema_version": "0.0.0",
+        "presenting_problem": "unspecified",
+        "symptoms": [{"label": "unspecified symptom", "severity": "unknown"}],
+        "red_flags": [],
+    }
+    llm_context = {"demographics": {"age_years": 30, "sex": "F"}, "schema_version": "0.0.0"}
+
+    _updated, reco, needs_more_info, meta = triage_and_followup(
+        intake_extracted=intake,
+        llm_context=llm_context,
+        follow_up_answers=None,
+        language="en",
+    )
+
+    assert needs_more_info is True
+    qids = {q["question_id"] for q in reco["follow_up_questions"]}
+    # Required low-info safety questions must never be dropped by selector output.
+    assert {"q_primary_domain", "q_breathing", "q_fever"} <= qids
+
+    sel = meta.get("followup_selector") if isinstance(meta, dict) else None
+    assert isinstance(sel, dict)
+    # Low-info currently consumes the full required question budget (max_k=5),
+    # so selector is intentionally not attempted.
+    assert sel.get("attempted") is False
+    assert sel.get("mode") == "rules"
+
+
 def test_triage_escalates_on_red_flags():
     intake = {
         "schema_version": "0.0.0",
