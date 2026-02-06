@@ -367,9 +367,27 @@ function App() {
       const r = (await resp.json()) as Run
       setRun(r)
 
+      let streamToken = ''
+      if (apiKey.trim()) {
+        const tokenResp = await fetch(`${apiBase}/runs/${r.run_id}/events-token`, {
+          method: 'POST',
+          headers: buildApiHeaders(),
+        })
+        if (!tokenResp.ok) {
+          setError(`Failed to open event stream token (${tokenResp.status}).`)
+          return
+        }
+        const tokenPayload = (await tokenResp.json()) as { stream_token?: string }
+        streamToken = (tokenPayload.stream_token ?? '').trim()
+        if (!streamToken) {
+          setError('Failed to open event stream token (missing token).')
+          return
+        }
+      }
+
       esRef.current?.close()
       const sseParams = new URLSearchParams()
-      if (apiKey.trim()) sseParams.set('api_key', apiKey.trim())
+      if (streamToken) sseParams.set('stream_token', streamToken)
       const esUrl = `${apiBase}/runs/${r.run_id}/events${sseParams.toString() ? `?${sseParams.toString()}` : ''}`
       const es = new EventSource(esUrl)
       esRef.current = es

@@ -39,7 +39,8 @@ DB viewer:
 - Read-only and redacted by design.
 - Returns compact table previews only (no raw OCR/PDF text, no free-form payload blobs).
 - App/API hardening:
-  - if `PHARMASSIST_API_KEY` is set, `runs` + `patients` endpoints require `X-Api-Key` (SSE accepts `?api_key=`).
+  - if `PHARMASSIST_API_KEY` is set, `runs` + `patients` endpoints require `X-Api-Key`.
+  - SSE uses short-lived per-run tokens from `POST /runs/{run_id}/events-token` (no long-lived API key in URL).
   - if `PHARMASSIST_API_KEY` is not set, these endpoints are loopback-only and reject proxy-forward headers.
 - Admin hardening:
   - if `PHARMASSIST_ADMIN_API_KEY` is set, requests must send header `X-Admin-Key`.
