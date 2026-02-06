@@ -162,6 +162,25 @@ def get_patient_visits(patient_ref: str) -> dict[str, Any]:
     }
 
 
+@app.get("/admin/db-preview/tables")
+def get_db_preview_tables() -> dict[str, Any]:
+    return {"tables": db.list_db_preview_tables()}
+
+
+@app.get("/admin/db-preview")
+def get_db_preview(
+    table: str = Query(min_length=1, max_length=32),
+    query: str = Query(default="", min_length=0, max_length=64),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> dict[str, Any]:
+    try:
+        payload = db.preview_db_table(table=table, query=query, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    validate_instance(payload, "db_preview")
+    return payload
+
+
 @app.get("/runs/{run_id}")
 def get_run(run_id: str) -> dict[str, Any]:
     run = db.get_run(run_id)

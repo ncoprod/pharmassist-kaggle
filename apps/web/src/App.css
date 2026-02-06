@@ -267,6 +267,36 @@ textarea {
   flex-wrap: wrap;
 }
 
+.dbTableWrap {
+  width: 100%;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.dbTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+  background: #ffffff;
+}
+
+.dbTable th,
+.dbTable td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dbTable th {
+  position: sticky;
+  top: 0;
+  background: #f8fffb;
+  color: #0f172a;
+  font-size: 12px;
+}
+
 .patientsList {
   display: grid;
   gap: 10px;
