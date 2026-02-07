@@ -4,6 +4,12 @@ import os
 from functools import lru_cache
 from typing import Any, Literal
 
+# Keep optional TensorFlow imports disabled for MedGemma paths to reduce
+# non-actionable Kaggle notebook noise (cuDNN/cuBLAS duplicate registration logs).
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+
 
 def _from_pretrained_with_dtype(loader: Any, model_id: str, *, dtype: Any, **kwargs: Any) -> Any:
     """Compatibility helper for Transformers versions.
@@ -115,8 +121,10 @@ def _load_model() -> tuple[Any, Any, Literal["causal", "conditional"], str]:
         from transformers import AutoModelForImageTextToText, AutoProcessor  # type: ignore
 
         model_kwargs: dict[str, Any] = {}
+        used_device_map = False
         if device == "cuda":
             model_kwargs["device_map"] = "auto"
+            used_device_map = True
 
         model = _from_pretrained_with_dtype(
             AutoModelForImageTextToText, model_id, dtype=dtype, **model_kwargs
@@ -129,14 +137,16 @@ def _load_model() -> tuple[Any, Any, Literal["causal", "conditional"], str]:
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
+        used_device_map = False
         model = _from_pretrained_with_dtype(AutoModelForCausalLM, model_id, dtype=dtype)
         proc = AutoTokenizer.from_pretrained(model_id)
 
-    try:
-        model.to(device)
-    except Exception:
-        # Some device-mapped models manage placement themselves.
-        pass
+    if not used_device_map:
+        try:
+            model.to(device)
+        except Exception:
+            # Some model wrappers manage placement internally.
+            pass
 
     return proc, model, mode, device
 

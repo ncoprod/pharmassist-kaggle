@@ -7,6 +7,12 @@ import os
 import sys
 from typing import Any, Literal
 
+# Keep optional TensorFlow imports disabled for MedGemma smoke runs to reduce
+# non-actionable runtime noise in Kaggle logs.
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+
 from pharmassist_api.cases.load_case import load_case_bundle
 from pharmassist_api.contracts.validate_schema import validate_or_return_errors
 from pharmassist_api.privacy.phi_boundary import raise_if_phi
