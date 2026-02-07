@@ -167,6 +167,8 @@ cd /Users/nico/Documents/AI/pharmassist-kaggle
 make dataset-load-check
 ```
 
+The check auto-raises a low shell `nofile` limit when possible (macOS safety).
+
 Expected order of magnitude with `seed=2025`:
 - `patients ~ 10k`
 - `visits ~ 66k`
