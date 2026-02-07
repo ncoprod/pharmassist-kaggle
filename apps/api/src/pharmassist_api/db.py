@@ -612,6 +612,36 @@ def upsert_inventory_product(*, sku: str, product: dict[str, Any]) -> None:
         )
 
 
+def upsert_document(*, doc_ref: str, metadata: dict[str, Any]) -> None:
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO documents(doc_ref, metadata_json)
+            VALUES(?, ?)
+            ON CONFLICT(doc_ref) DO UPDATE SET
+              metadata_json = excluded.metadata_json
+            """,
+            (
+                doc_ref,
+                json.dumps(metadata, ensure_ascii=False, separators=(",", ":")),
+            ),
+        )
+
+
+def get_document(doc_ref: str) -> dict[str, Any] | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT doc_ref, metadata_json FROM documents WHERE doc_ref = ?",
+            (doc_ref,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "doc_ref": row["doc_ref"],
+        "metadata": _json_load_object(row["metadata_json"]),
+    }
+
+
 def list_inventory(*, limit: int | None = None) -> list[dict[str, Any]]:
     sql = "SELECT product_json FROM inventory ORDER BY sku ASC"
     params: tuple[Any, ...] = ()
@@ -639,6 +669,12 @@ def count_visits() -> int:
 def count_inventory() -> int:
     with _connect() as conn:
         row = conn.execute("SELECT COUNT(1) AS c FROM inventory").fetchone()
+        return int(row["c"]) if row else 0
+
+
+def count_documents() -> int:
+    with _connect() as conn:
+        row = conn.execute("SELECT COUNT(1) AS c FROM documents").fetchone()
         return int(row["c"]) if row else 0
 
 

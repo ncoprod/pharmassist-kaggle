@@ -16,3 +16,4 @@ test-results/
 .DS_Store
 .env*
 *.log
+.kaggle_kernel/

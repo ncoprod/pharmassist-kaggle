@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/document_upload_receipt.schema.json",
+  "title": "Document Upload Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "doc_ref",
+    "visit_ref",
+    "patient_ref",
+    "event_ref",
+    "trigger",
+    "language",
+    "sha256_12",
+    "page_count",
+    "text_length",
+    "redaction_replacements"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ingested"]
+    },
+    "doc_ref": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "visit_ref": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "patient_ref": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "event_ref": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "trigger": {
+      "type": "string",
+      "enum": ["ocr_upload"]
+    },
+    "language": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/language_code"
+    },
+    "sha256_12": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{12}$"
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    },
+    "text_length": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50000
+    },
+    "redaction_replacements": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2000
+    }
+  }
+}

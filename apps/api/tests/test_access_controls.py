@@ -62,6 +62,22 @@ def test_endpoints_require_api_key_when_configured(tmp_path, monkeypatch):
         get_ok = client.get(f"/runs/{run_id}", headers={"X-Api-Key": "appsecret"})
         assert get_ok.status_code == 200
 
+        upload_denied = client.post(
+            "/documents/prescription",
+            data={"patient_ref": "pt_000000", "language": "en"},
+            files={"file": ("rx.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        )
+        assert upload_denied.status_code == 401
+
+        upload_with_key = client.post(
+            "/documents/prescription",
+            data={"patient_ref": "pt_000000", "language": "en"},
+            files={"file": ("rx.pdf", b"%PDF-1.4 fake", "application/pdf")},
+            headers={"X-Api-Key": "appsecret"},
+        )
+        # request reaches endpoint and fails on invalid/empty PDF extraction, not auth
+        assert upload_with_key.status_code == 400
+
 
 def test_events_stream_token_flow_when_api_key_enabled(tmp_path, monkeypatch):
     monkeypatch.setenv("PHARMASSIST_DB_PATH", str(tmp_path / "test.db"))

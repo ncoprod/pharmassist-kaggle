@@ -13,6 +13,9 @@ Key schemas:
 - `evidence_item.schema.json`: citations/provenance
 - `trace.schema.json`: agentic trace (no raw prompts)
 - `run.schema.json`: end-to-end run state + policy violations
+- `pharmacy_event_payload.schema.json`: strict allowlist payloads for synthetic pharmacy events
+- `db_preview.schema.json`: redacted read-only admin preview payload
+- `document_upload_receipt.schema.json`: metadata-only response for prescription PDF ingestion
 
 Validation:
 

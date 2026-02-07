@@ -12,6 +12,7 @@ What this repo demonstrates:
   `question_id` allowlist (no free-form question generation).
 - **No real patient data**: synthetic cases only.
 - **Near‑MVP realism**: synthetic **patients + visits** and a “Start run from visit” flow.
+- **Scan ordonnance v1**: PDF text-layer upload -> deterministic PHI redaction -> PHI boundary -> A1 intake extraction (metadata-only persistence).
 
 Repo layout:
 - `packages/contracts/`: canonical JSON Schemas + examples
@@ -28,12 +29,14 @@ Endpoints:
 - `GET /patients?query=pt_0000`
 - `GET /patients/{patient_ref}`
 - `GET /patients/{patient_ref}/visits`
+- `POST /documents/prescription` (multipart PDF + `patient_ref` + `language`)
 - `GET /admin/db-preview/tables`
 - `GET /admin/db-preview?table=patients&query=pt_0000&limit=50`
 
 Run creation:
 - `POST /runs` accepts `visit_ref` (+ optional `patient_ref`) and resolves a case bundle from the dataset
   **without any PHI** (no OCR/PDF text stored).
+- PDF ingestion creates a synthetic visit linked to `patient_ref`, then you can launch a run from that visit.
 
 DB viewer:
 - Read-only and redacted by design.
@@ -105,6 +108,8 @@ npm -w apps/web run build
 make validate
 .venv/bin/pytest -q
 make e2e
+make redteam
+make security-audit
 ```
 
 Note: `make e2e` starts and stops the API/web servers automatically for Playwright.
@@ -114,6 +119,13 @@ To run hardened E2E with auth enabled:
 
 ```bash
 PHARMASSIST_API_KEY='change-me' PHARMASSIST_ADMIN_API_KEY='change-me' make e2e
+```
+
+No-GPU evaluation and replay:
+
+```bash
+make eval
+make demo-replay
 ```
 
 For manual UI testing, run `make api-dev` and `make web-dev` in separate terminals.

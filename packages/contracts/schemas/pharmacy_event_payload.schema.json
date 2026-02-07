@@ -55,6 +55,45 @@
           }
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "doc_ref",
+        "sha256_12",
+        "page_count",
+        "text_length",
+        "redaction_applied",
+        "redaction_replacements"
+      ],
+      "properties": {
+        "doc_ref": {
+          "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+        },
+        "sha256_12": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{12}$"
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "text_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50000
+        },
+        "redaction_applied": {
+          "type": "boolean"
+        },
+        "redaction_replacements": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000
+        }
+      }
     }
   ]
 }
