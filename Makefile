@@ -1,11 +1,11 @@
-.PHONY: help setup api-install api-dev api-dev-full api-lint web-install web-dev web-dev-full web-build web-lint lint build dataset-fetch
+.PHONY: help setup api-install api-dev api-dev-full api-lint web-install web-dev web-dev-full web-build web-lint lint build dataset-fetch dataset-load-check
 .PHONY: e2e redteam security-audit
 .PHONY: validate eval demo-replay
 
 PYTHON ?= python3
 VENV_DIR := .venv
-DEMO_DB_PATH ?= /tmp/pharmassist_full.db
-DEMO_DATA_DIR ?= /tmp/paris15_full
+DEMO_DB_PATH ?= $(CURDIR)/.data/pharmassist_full.db
+DEMO_DATA_DIR ?= $(CURDIR)/.data/paris15_full
 DEMO_API_KEY ?= change-me
 DEMO_ADMIN_API_KEY ?= change-me
 DEMO_WEB_PORT ?= 5173
@@ -19,6 +19,7 @@ help:
 	@echo "  lint        - Lint API + web"
 	@echo "  build       - Build web"
 	@echo "  dataset-fetch - Download pinned full demo dataset from Kaggle"
+	@echo "  dataset-load-check - Validate loading full dataset into SQLite"
 	@echo "  eval        - Run deterministic evaluation harness (no GPU)"
 	@echo "  demo-replay - Produce reproducible replay artifacts (no GPU)"
 
@@ -82,3 +83,6 @@ demo-replay: $(VENV_DIR)
 
 dataset-fetch:
 	./scripts/fetch_paris15_dataset.sh .data/paris15_full
+
+dataset-load-check:
+	./scripts/check_full_dataset_load.sh
