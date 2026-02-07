@@ -8,9 +8,9 @@ import threading
 import time
 from collections import deque
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ from pharmassist_api.contracts.validate_schema import validate_instance
 from pharmassist_api.follow_up_answers import validate_and_canonicalize_follow_up_answers
 from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run_with_answers, run_pipeline
 from pharmassist_api.pharmacy import ensure_pharmacy_dataset_loaded
+from pharmassist_api.pharmacy.prescription_upload import ingest_prescription_pdf, max_upload_bytes
 from pharmassist_api.privacy.phi_boundary import scan_text
 from pharmassist_api.validators.phi_scanner import scan_for_phi
 
@@ -406,6 +407,132 @@ def get_patient_visits(request: Request, patient_ref: str) -> dict[str, Any]:
         "patient_ref": patient_ref,
         "visits": db.list_patient_visits(patient_ref=patient_ref, limit=50),
     }
+
+
+@app.post("/documents/prescription")
+async def upload_prescription_pdf(
+    request: Request,
+    patient_ref: Annotated[str, Form(min_length=1, max_length=64)],
+    file: Annotated[UploadFile, File()],
+    language: Annotated[Literal["fr", "en"], Form()] = "fr",
+) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/documents/prescription")
+    patient_ref_norm = patient_ref.strip()
+    if not patient_ref_norm:
+        raise HTTPException(status_code=400, detail="patient_ref is required")
+    if not db.get_patient(patient_ref_norm):
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    filename = (file.filename or "").strip()
+    content_type = (file.content_type or "").strip().lower()
+    if not filename.lower().endswith(".pdf") or content_type not in {
+        "application/pdf",
+        "application/x-pdf",
+        "application/octet-stream",
+    }:
+        raise HTTPException(status_code=415, detail="Only PDF uploads are supported")
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+
+    size_limit = max_upload_bytes()
+    if len(payload) > size_limit:
+        raise HTTPException(status_code=413, detail=f"Uploaded file exceeds {size_limit} bytes")
+
+    try:
+        result = ingest_prescription_pdf(
+            patient_ref=patient_ref_norm,
+            language=language,
+            pdf_bytes=payload,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or unreadable PDF payload") from None
+
+    common_doc_meta = {
+        "status": result["status"],
+        "source": "prescription_pdf_text_layer",
+        "filename": filename,
+        "content_type": content_type,
+        "patient_ref": patient_ref_norm,
+        "visit_ref": result["visit_ref"],
+        "event_ref": result["event_ref"],
+        "sha256_12": result["sha256_12"],
+        "byte_size": len(payload),
+        "page_count": result["page_count"],
+        "text_length": result["text_length"],
+        "redacted_text_length": result["redacted_text_length"],
+        "redaction_replacements": result["redaction_replacements"],
+        "language": language,
+        "occurred_at": result["occurred_at"],
+    }
+
+    if result["status"] == "failed_phi_boundary":
+        db.upsert_document(
+            doc_ref=result["doc_ref"],
+            metadata={
+                **common_doc_meta,
+                "violations": result["violations"],
+            },
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "PHI detected after redaction",
+                "doc_ref": result["doc_ref"],
+                "violations": result["violations"],
+            },
+        )
+
+    intake_extracted = result["intake_extracted"]
+    if not isinstance(intake_extracted, dict):
+        raise HTTPException(status_code=500, detail="Internal extraction error")
+
+    db.upsert_visit(
+        visit_ref=result["visit_ref"],
+        patient_ref=patient_ref_norm,
+        occurred_at=result["occurred_at"],
+        primary_domain=str(result["primary_domain"]),
+        intents=["document_uploaded", "symptom_intake"],
+        intake_extracted=intake_extracted,
+    )
+    event_payload = result["event_payload"]
+    if not isinstance(event_payload, dict):
+        raise HTTPException(status_code=500, detail="Internal event payload error")
+    db.upsert_pharmacy_event(
+        event_ref=result["event_ref"],
+        visit_ref=result["visit_ref"],
+        patient_ref=patient_ref_norm,
+        occurred_at=result["occurred_at"],
+        event_type="document_uploaded",
+        payload=event_payload,
+    )
+    db.upsert_document(
+        doc_ref=result["doc_ref"],
+        metadata={
+            **common_doc_meta,
+            "event_payload_keys": sorted([k for k in event_payload.keys() if isinstance(k, str)]),
+        },
+    )
+
+    receipt = {
+        "schema_version": "0.0.0",
+        "status": "ingested",
+        "doc_ref": result["doc_ref"],
+        "visit_ref": result["visit_ref"],
+        "patient_ref": patient_ref_norm,
+        "event_ref": result["event_ref"],
+        "trigger": "ocr_upload",
+        "language": language,
+        "sha256_12": result["sha256_12"],
+        "page_count": result["page_count"],
+        "text_length": result["text_length"],
+        "redaction_replacements": result["redaction_replacements"],
+    }
+    validate_instance(receipt, "document_upload_receipt")
+    return receipt
 
 
 @app.get("/admin/db-preview/tables")

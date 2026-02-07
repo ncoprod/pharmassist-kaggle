@@ -17,6 +17,8 @@ Key endpoints:
 - `POST /runs` start a synthetic run
 - `GET /runs/{run_id}` fetch run state
 - `GET /runs/{run_id}/events` stream SSE events
+- `POST /documents/prescription` ingest PDF text-layer (metadata-only persistence)
+- `GET /patients*` browse synthetic patients/visits
 
 Contracts + policies:
 - JSON Schemas + examples: `packages/contracts/`
@@ -31,4 +33,11 @@ PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.haidef_smoke \
   --mode conditional \
   --case-ref case_000042 \
   --language en
+```
+
+No-GPU deterministic checks:
+
+```bash
+PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.eval_suite --out .data/eval/latest
+PYTHONPATH=apps/api/src python -m pharmassist_api.scripts.demo_replay --out .data/demo_replay/latest
 ```

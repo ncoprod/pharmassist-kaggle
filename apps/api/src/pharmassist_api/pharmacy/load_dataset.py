@@ -22,6 +22,17 @@ def resolve_dataset_dir() -> Path:
     return default_dataset_dir()
 
 
+def default_catalog_demo_path() -> Path:
+    return Path(__file__).resolve().parent / "fixtures" / "catalog" / "products.demo.json"
+
+
+def resolve_catalog_demo_path() -> Path:
+    env = os.getenv("PHARMASSIST_CATALOG_DEMO_PATH", "").strip()
+    if env:
+        return Path(env)
+    return default_catalog_demo_path()
+
+
 def _iter_jsonl_gz(path: Path) -> Iterable[Any]:
     with gzip.open(path, "rt", encoding="utf-8") as f:
         for line in f:
@@ -74,6 +85,39 @@ def _sanitize_event_payload(event_type: str, payload: dict[str, Any]) -> dict[st
         if not out_meds:
             return None
         return {"rx_medications": out_meds[:50]}
+
+    if event_type == "document_uploaded":
+        doc_ref = payload.get("doc_ref")
+        sha12 = payload.get("sha256_12")
+        page_count = payload.get("page_count")
+        text_length = payload.get("text_length")
+        redaction_applied = payload.get("redaction_applied")
+        redaction_replacements = payload.get("redaction_replacements")
+
+        if not (isinstance(doc_ref, str) and doc_ref.strip()):
+            return None
+        if not (isinstance(sha12, str) and len(sha12) == 12):
+            return None
+        if not isinstance(page_count, int) or page_count <= 0 or page_count > 200:
+            return None
+        if not isinstance(text_length, int) or text_length <= 0 or text_length > 50000:
+            return None
+        if not isinstance(redaction_applied, bool):
+            return None
+        if (
+            not isinstance(redaction_replacements, int)
+            or redaction_replacements < 0
+            or redaction_replacements > 2000
+        ):
+            return None
+        return {
+            "doc_ref": doc_ref.strip(),
+            "sha256_12": sha12.lower(),
+            "page_count": page_count,
+            "text_length": text_length,
+            "redaction_applied": redaction_applied,
+            "redaction_replacements": redaction_replacements,
+        }
 
     # Unknown event types are ignored (safer than persisting unknown payloads).
     return None
@@ -209,13 +253,42 @@ def ensure_pharmacy_dataset_loaded(*, dataset_dir: Path | None = None) -> dict[s
         db.upsert_inventory_product(sku=sku, product=raw)
         inv_loaded += 1
 
+    catalog_loaded = _load_catalog_demo_products(resolve_catalog_demo_path())
+
     return {
         "loaded": 1,
         "patients_loaded": patients_loaded,
         "visits_loaded": visits_loaded,
         "events_loaded": events_loaded,
         "inventory_loaded": inv_loaded,
+        "catalog_loaded": catalog_loaded,
         "patients": db.count_patients(),
         "visits": db.count_visits(),
         "inventory": db.count_inventory(),
     }
+
+
+def _load_catalog_demo_products(path: Path) -> int:
+    if not path.exists():
+        return 0
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    if not isinstance(payload, list):
+        return 0
+
+    loaded = 0
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        sku = row.get("sku")
+        if not (isinstance(sku, str) and sku.strip()):
+            continue
+        try:
+            validate_instance(row, "product")
+        except Exception:
+            continue
+        db.upsert_inventory_product(sku=sku, product=row)
+        loaded += 1
+    return loaded

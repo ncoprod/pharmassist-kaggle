@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.0.0",
+  "status": "ingested",
+  "doc_ref": "doc_9f2bc0ab12ef",
+  "visit_ref": "visit_doc_1d2e3f4a5b6c",
+  "patient_ref": "pt_000001",
+  "event_ref": "ev_doc_7a8b9c0d1e2f",
+  "trigger": "ocr_upload",
+  "language": "fr",
+  "sha256_12": "abcdef012345",
+  "page_count": 1,
+  "text_length": 241,
+  "redaction_replacements": 4
+}

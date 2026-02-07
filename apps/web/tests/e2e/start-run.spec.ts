@@ -1,4 +1,10 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { expect, test } from '@playwright/test'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 test('start run completes (default case)', async ({ page }) => {
   await page.goto('/')
@@ -125,4 +131,40 @@ test('db viewer loads redacted rows', async ({ page }) => {
 
   await expect(page.getByTestId('db-preview-count')).toBeVisible()
   await expect(page.locator('[data-testid="db-row"]').first()).toBeVisible()
+})
+
+test('patients flow: upload prescription PDF and start run', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTestId('tab-patients').click()
+  await page.getByTestId('patient-search').fill('pt_000000')
+  await page.getByTestId('patient-search-btn').click()
+  await page.getByTestId('patient-result-pt_000000').click()
+
+  const pdfPath = path.join(__dirname, '../fixtures/rx_phi_free.pdf')
+  await page.getByTestId('patient-prescription-file').setInputFiles(pdfPath)
+  await page.getByTestId('patient-prescription-upload-btn').click()
+
+  await expect(page.locator('[data-testid="error-banner"]')).toHaveCount(0)
+  await expect(page.getByTestId('patient-prescription-receipt')).toBeVisible()
+
+  await page.getByTestId('patient-prescription-start-run').click()
+  const runStatus = page.getByTestId('run-status')
+  await expect(runStatus).toBeVisible()
+  await expect(runStatus).toHaveText('completed')
+})
+
+test('patients flow: upload PHI-like PDF is blocked', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTestId('tab-patients').click()
+  await page.getByTestId('patient-search').fill('pt_000000')
+  await page.getByTestId('patient-search-btn').click()
+  await page.getByTestId('patient-result-pt_000000').click()
+
+  const pdfPath = path.join(__dirname, '../fixtures/rx_phi_present.pdf')
+  await page.getByTestId('patient-prescription-file').setInputFiles(pdfPath)
+  await page.getByTestId('patient-prescription-upload-btn').click()
+
+  await expect(page.getByTestId('error-banner')).toContainText('PHI detected')
 })

@@ -1,6 +1,6 @@
 .PHONY: help setup api-install api-dev api-dev-full api-lint web-install web-dev web-dev-full web-build web-lint lint build
 .PHONY: e2e redteam security-audit
-.PHONY: validate
+.PHONY: validate eval demo-replay
 
 PYTHON ?= python3
 VENV_DIR := .venv
@@ -18,6 +18,8 @@ help:
 	@echo "  web-dev-full- Run web dev server preconfigured for api-dev-full"
 	@echo "  lint        - Lint API + web"
 	@echo "  build       - Build web"
+	@echo "  eval        - Run deterministic evaluation harness (no GPU)"
+	@echo "  demo-replay - Produce reproducible replay artifacts (no GPU)"
 
 setup: api-install web-install
 
@@ -70,3 +72,9 @@ security-audit: $(VENV_DIR)
 	$(VENV_DIR)/bin/pip-audit
 	$(VENV_DIR)/bin/bandit -q -r apps/api/src -lll
 	npm audit --omit=dev --audit-level=high
+
+eval: $(VENV_DIR)
+	PYTHONPATH=apps/api/src $(VENV_DIR)/bin/python -m pharmassist_api.scripts.eval_suite --out .data/eval/latest
+
+demo-replay: $(VENV_DIR)
+	PYTHONPATH=apps/api/src $(VENV_DIR)/bin/python -m pharmassist_api.scripts.demo_replay --out .data/demo_replay/latest

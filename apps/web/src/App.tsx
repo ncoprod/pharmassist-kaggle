@@ -128,6 +128,21 @@ type VisitSummary = {
   presenting_problem?: string
 }
 
+type DocumentUploadReceipt = {
+  schema_version: string
+  status: 'ingested'
+  doc_ref: string
+  visit_ref: string
+  patient_ref: string
+  event_ref: string
+  trigger: 'ocr_upload'
+  language: 'fr' | 'en'
+  sha256_12: string
+  page_count: number
+  text_length: number
+  redaction_replacements: number
+}
+
 type DbCell = string | number | boolean | null | string[]
 type DbRow = Record<string, DbCell>
 
@@ -171,6 +186,9 @@ function App() {
   const [selectedPatient, setSelectedPatient] = useState<PatientDetail | null>(null)
   const [patientVisits, setPatientVisits] = useState<VisitSummary[]>([])
   const [isPatientsLoading, setIsPatientsLoading] = useState(false)
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null)
+  const [isUploadingPrescription, setIsUploadingPrescription] = useState(false)
+  const [uploadReceipt, setUploadReceipt] = useState<DocumentUploadReceipt | null>(null)
 
   const [dbTables, setDbTables] = useState<string[]>([])
   const [dbTable, setDbTable] = useState('patients')
@@ -485,7 +503,7 @@ function App() {
     }
   }
 
-  async function openPatient(patientRef: string) {
+  async function openPatient(patientRef: string, opts?: { preserveUpload?: boolean }) {
     setError(null)
     setIsPatientsLoading(true)
     try {
@@ -509,6 +527,10 @@ function App() {
       const v = (await vResp.json()) as { visits?: VisitSummary[] }
       setSelectedPatient(p)
       setPatientVisits(Array.isArray(v.visits) ? v.visits : [])
+      if (!opts?.preserveUpload) {
+        setUploadReceipt(null)
+        setPrescriptionFile(null)
+      }
     } catch {
       setError(`Cannot reach API at ${apiBase}.`)
     } finally {
@@ -519,6 +541,50 @@ function App() {
   async function startRunFromVisit(patientRef: string, visitRef: string) {
     setActiveTab('run')
     await startRun({ patient_ref: patientRef, visit_ref: visitRef })
+  }
+
+  async function uploadPrescriptionForSelectedPatient() {
+    if (!selectedPatient) return
+    if (!prescriptionFile) {
+      setError('Select a PDF file first.')
+      return
+    }
+    setError(null)
+    setIsUploadingPrescription(true)
+    try {
+      const form = new FormData()
+      form.append('patient_ref', selectedPatient.patient_ref)
+      form.append('language', language)
+      form.append('file', prescriptionFile)
+
+      const resp = await fetch(`${apiBase}/documents/prescription`, {
+        method: 'POST',
+        headers: buildApiHeaders(),
+        body: form,
+      })
+      if (!resp.ok) {
+        let msg = `Failed to upload prescription (${resp.status}).`
+        try {
+          const payload = (await resp.json()) as { detail?: unknown }
+          if (typeof payload?.detail === 'string') {
+            msg = payload.detail
+          } else if (payload?.detail && typeof payload.detail === 'object') {
+            msg = JSON.stringify(payload.detail)
+          }
+        } catch {
+          // keep default message
+        }
+        setError(msg)
+        return
+      }
+      const receipt = (await resp.json()) as DocumentUploadReceipt
+      setUploadReceipt(receipt)
+      await openPatient(selectedPatient.patient_ref, { preserveUpload: true })
+    } catch {
+      setError(`Cannot reach API at ${apiBase}.`)
+    } finally {
+      setIsUploadingPrescription(false)
+    }
   }
 
   async function loadDbTables() {
@@ -582,7 +648,7 @@ function App() {
           <div>
             <div className="title">PharmAssist AI — Kaggle Demo</div>
             <div className="subtitle">
-              Feb 7: Patients + DB viewer + pharmacy-year dataset (synthetic-only, no PHI)
+              Feb 8: Patients + DB viewer + ordonnance scan (synthetic-only, no PHI)
             </div>
           </div>
           <div className="controls">
@@ -705,6 +771,43 @@ function App() {
                       <span className="v">{selectedPatient.llm_context?.demographics?.sex ?? '—'}</span>
                     </div>
                   </div>
+
+                  <div className="subTitle">Scan ordonnance (PDF text-layer)</div>
+                  <div className="row">
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => {
+                        setPrescriptionFile(e.target.files?.[0] ?? null)
+                      }}
+                      data-testid="patient-prescription-file"
+                    />
+                    <button
+                      className="printBtn"
+                      onClick={() => void uploadPrescriptionForSelectedPatient()}
+                      disabled={isUploadingPrescription}
+                      data-testid="patient-prescription-upload-btn"
+                    >
+                      {isUploadingPrescription ? 'Uploading…' : 'Upload PDF'}
+                    </button>
+                    {uploadReceipt ? (
+                      <button
+                        className="printBtn"
+                        onClick={() =>
+                          void startRunFromVisit(selectedPatient.patient_ref, uploadReceipt.visit_ref)
+                        }
+                        data-testid="patient-prescription-start-run"
+                      >
+                        Start run (uploaded)
+                      </button>
+                    ) : null}
+                  </div>
+                  {uploadReceipt ? (
+                    <div className="muted" data-testid="patient-prescription-receipt">
+                      doc_ref={uploadReceipt.doc_ref} visit_ref={uploadReceipt.visit_ref} pages=
+                      {uploadReceipt.page_count} redactions={uploadReceipt.redaction_replacements}
+                    </div>
+                  ) : null}
 
                   <div className="subTitle">Visits</div>
                   <div className="patientsList">
