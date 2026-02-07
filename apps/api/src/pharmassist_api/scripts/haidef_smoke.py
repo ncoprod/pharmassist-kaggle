@@ -123,6 +123,28 @@ def _pick_device() -> str:
     return "cpu"
 
 
+def _hf_token() -> str:
+    return (os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or "").strip()
+
+
+def _auth_kwargs() -> dict[str, Any]:
+    token = _hf_token()
+    return {"token": token} if token else {}
+
+
+def _is_gated_access_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    needles = (
+        "gated repo",
+        "401 client error",
+        "access to model",
+        "restricted",
+        "you must have access",
+        "cannot access gated repo",
+    )
+    return any(n in msg for n in needles)
+
+
 def _run_causal(model_id: str, prompt: str, *, max_new_tokens: int, debug: bool) -> str:
     import torch  # type: ignore
     from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
@@ -130,8 +152,9 @@ def _run_causal(model_id: str, prompt: str, *, max_new_tokens: int, debug: bool)
     device = _pick_device()
     dtype = torch.float16 if device in ("cuda", "mps") else torch.float32
 
-    tok = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype)
+    auth = _auth_kwargs()
+    tok = AutoTokenizer.from_pretrained(model_id, **auth)
+    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype, **auth)
     model.to(device)
 
     inputs = _tokenize_chat(tok, prompt)
@@ -171,6 +194,7 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int, debug: 
     model_kwargs: dict[str, Any] = {}
     if device == "cuda":
         model_kwargs["device_map"] = "auto"
+    model_kwargs.update(_auth_kwargs())
 
     # Newer Transformers prefer `dtype=...`, older ones accept `torch_dtype=...`.
     try:
@@ -261,10 +285,19 @@ def main() -> int:
             "Missing ML deps. In a local venv you can run:\n"
             "  .venv/bin/pip install -e \"apps/api[ml]\"\n"
             "In a Kaggle notebook, prefer minimal installs (avoid editable installs):\n"
-            "  pip install -q transformers accelerate safetensors\n"
+            "  pip install -q transformers accelerate safetensors huggingface_hub\n"
         )
         sys.stderr.write(f"ImportError: {e}\n")
         return 2
+    except Exception as e:
+        if _is_gated_access_error(e):
+            sys.stderr.write(
+                "HF access error: ensure Kaggle secret HF_TOKEN belongs to the Hugging Face "
+                f"account approved for `{args.model}`.\n"
+            )
+            return 3
+        sys.stderr.write(f"Model runtime error: {e}\n")
+        return 1
 
     parsed = _parse_first_json_object(raw)
     if not isinstance(parsed, dict):
