@@ -236,6 +236,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     summary = asyncio.run(_run_eval(args.out))
+    rows = summary.get("rows", [])
+    failed_rows = [
+        row
+        for row in rows
+        if row.get("status") != "completed" or not bool(row.get("schema_valid"))
+    ]
+    if failed_rows:
+        print(
+            "EVAL_FAIL",
+            f"cases={summary['total_cases']}",
+            f"failed_cases={len(failed_rows)}",
+            f"schema_valid_rate={summary['schema_valid_rate']:.4f}",
+        )
+        return 1
+
     print(
         "EVAL_OK",
         f"cases={summary['total_cases']}",

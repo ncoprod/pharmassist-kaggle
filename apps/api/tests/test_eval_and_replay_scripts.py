@@ -57,3 +57,31 @@ def test_eval_suite_schema_valid_rate_uses_row_flag(tmp_path: Path, monkeypatch)
     out_dir = tmp_path / "eval_out_rate"
     summary = asyncio.run(eval_suite._run_eval(out_dir))
     assert float(summary["schema_valid_rate"]) == 0.0
+
+
+def test_eval_suite_main_fails_on_invalid_rows(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PHARMASSIST_DB_PATH", str(tmp_path / "eval_main_fail.db"))
+
+    from pharmassist_api.scripts import eval_suite
+
+    async def _fake_run_eval(_out_dir):
+        return {
+            "schema_version": "0.0.0",
+            "total_cases": 1,
+            "completed_cases": 1,
+            "schema_valid_rate": 0.0,
+            "red_flag_recall": 1.0,
+            "mean_symptom_f1": 1.0,
+            "p95_latency_ms": 1.0,
+            "rows": [
+                {
+                    "case_id": "fake",
+                    "status": "completed",
+                    "schema_valid": False,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(eval_suite, "_run_eval", _fake_run_eval)
+    code = eval_suite.main(["--out", str(tmp_path / "eval_out_main_fail")])
+    assert code == 1
