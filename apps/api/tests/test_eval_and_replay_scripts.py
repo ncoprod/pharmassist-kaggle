@@ -31,3 +31,29 @@ def test_demo_replay_writes_artifacts(tmp_path: Path, monkeypatch):
     for row in scenarios:
         assert Path(str(row["run_path"])).exists()
         assert Path(str(row["events_path"])).exists()
+
+
+def test_eval_suite_schema_valid_rate_uses_row_flag(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PHARMASSIST_DB_PATH", str(tmp_path / "eval_rate.db"))
+
+    from pharmassist_api.scripts import eval_suite
+
+    async def _fake_run_case(_case):
+        return {
+            "case_id": "fake",
+            "case_ref": "case_000042",
+            "language": "en",
+            "run_id": "run_fake",
+            "status": "completed",
+            "schema_valid": False,
+            "schema_error": "boom",
+            "expected_escalation": False,
+            "actual_escalation": False,
+            "symptom_f1": 0.0,
+            "latency_ms": 1.0,
+        }
+
+    monkeypatch.setattr(eval_suite, "_run_case", _fake_run_case)
+    out_dir = tmp_path / "eval_out_rate"
+    summary = asyncio.run(eval_suite._run_eval(out_dir))
+    assert float(summary["schema_valid_rate"]) == 0.0

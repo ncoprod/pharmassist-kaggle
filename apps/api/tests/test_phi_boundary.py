@@ -51,3 +51,13 @@ def test_phi_boundary_blocks_label_like_address_colon():
 def test_phi_boundary_blocks_label_like_dob_colon():
     with pytest.raises(PhiBoundaryError):
         raise_if_phi("DOB: 01/02/2003", "$.intake_text_ocr")
+
+
+def test_phi_boundary_blocks_birth_date_without_colon():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("Date de naissance 2001-01-02", "$.intake_text_ocr")
+
+
+def test_phi_boundary_blocks_street_address_without_label():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("15 rue de Vaugirard 75015 Paris", "$.intake_text_ocr")
