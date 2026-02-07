@@ -30,6 +30,15 @@ def _model_id() -> str:
     return os.getenv("PHARMASSIST_MEDGEMMA_MODEL", "google/medgemma-4b-it").strip()
 
 
+def _hf_token() -> str:
+    return (os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or "").strip()
+
+
+def _auth_kwargs() -> dict[str, Any]:
+    token = _hf_token()
+    return {"token": token} if token else {}
+
+
 def _device() -> str:
     # Supported values:
     # - auto: prefer cuda, else mps, else cpu
@@ -103,7 +112,7 @@ def _load_model() -> tuple[Any, Any, Literal["causal", "conditional"], str]:
     from transformers import AutoConfig  # type: ignore
 
     model_id = _model_id()
-    cfg = AutoConfig.from_pretrained(model_id)
+    cfg = AutoConfig.from_pretrained(model_id, **_auth_kwargs())
     architectures = list(getattr(cfg, "architectures", None) or [])
     mode = _infer_loader_mode(architectures)
 
@@ -125,21 +134,24 @@ def _load_model() -> tuple[Any, Any, Literal["causal", "conditional"], str]:
         if device == "cuda":
             model_kwargs["device_map"] = "auto"
             used_device_map = True
+        model_kwargs.update(_auth_kwargs())
 
         model = _from_pretrained_with_dtype(
             AutoModelForImageTextToText, model_id, dtype=dtype, **model_kwargs
         )
         try:
             # Pin to the slow processor for stability (Transformers will change defaults).
-            proc = AutoProcessor.from_pretrained(model_id, use_fast=False)
+            proc = AutoProcessor.from_pretrained(model_id, use_fast=False, **_auth_kwargs())
         except TypeError:
-            proc = AutoProcessor.from_pretrained(model_id)
+            proc = AutoProcessor.from_pretrained(model_id, **_auth_kwargs())
     else:
         from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
         used_device_map = False
-        model = _from_pretrained_with_dtype(AutoModelForCausalLM, model_id, dtype=dtype)
-        proc = AutoTokenizer.from_pretrained(model_id)
+        model = _from_pretrained_with_dtype(
+            AutoModelForCausalLM, model_id, dtype=dtype, **_auth_kwargs()
+        )
+        proc = AutoTokenizer.from_pretrained(model_id, **_auth_kwargs())
 
     if not used_device_map:
         try:

@@ -264,7 +264,8 @@ def load_hf_token(max_attempts=8):
         raise RuntimeError(f"kaggle_secrets unavailable: {exc}") from exc
     for attempt in range(1, max_attempts + 1):
         try:
-            token = UserSecretsClient().get_secret("HF_TOKEN")
+            user_secrets = UserSecretsClient()
+            token = user_secrets.get_secret("HF_TOKEN")
             if token:
                 os.environ["HF_TOKEN"] = token
                 return True
@@ -282,17 +283,26 @@ if not HF_TOKEN_OK:
 ```
 
 ```python
-# 3) Cache models under /kaggle/working so subsequent runs reuse downloads
+# 3) Verify token can access the gated MedGemma repo
+from huggingface_hub import HfApi
+
+api = HfApi(token=os.environ["HF_TOKEN"])
+info = api.model_info("google/medgemma-4b-it")
+print("HF_GATED_ACCESS_OK:", info.id)
+```
+
+```python
+# 4) Cache models under /kaggle/working so subsequent runs reuse downloads
 import os
 os.environ["HF_HOME"] = "/kaggle/working/hf"
 ```
 
 ```python
-# 4) (Optional) Install only missing deps (avoid editable installs in Kaggle)
+# 5) (Optional) Install only missing deps (avoid editable installs in Kaggle)
 import importlib, subprocess, sys
 
 need = []
-for pkg in ["torch", "transformers", "accelerate", "safetensors", "jsonschema"]:
+for pkg in ["torch", "transformers", "accelerate", "safetensors", "jsonschema", "huggingface_hub"]:
     try:
         importlib.import_module(pkg)
     except Exception:
@@ -306,7 +316,7 @@ else:
 ```
 
 ```python
-# 5) Run MedGemma extraction smoke test (validates JSON against schema)
+# 6) Run MedGemma extraction smoke test (validates JSON against schema)
 #    This step is mandatory and must PASS.
 import os
 import subprocess
@@ -342,7 +352,7 @@ if proc.returncode != 0:
 ```
 
 ```python
-# 6) (Optional) Follow-up selector smoke (low-info case)
+# 7) (Optional) Follow-up selector smoke (low-info case)
 #
 # This run is expected to stop in `needs_more_info` and show follow-up questions.
 # Note: if required low-info questions already fill the max budget, triage keeps
@@ -375,7 +385,7 @@ assert "q_primary_domain" in question_ids
 ```
 
 ```python
-# 7) Run the full pipeline (A1 uses MedGemma; A7 report can also use MedGemma)
+# 8) Run the full pipeline (A1 uses MedGemma; A7 report can also use MedGemma)
 #
 # IMPORTANT: do NOT use asyncio.run(...) inside notebooks (an event loop is already running).
 # Use top-level `await` instead.
@@ -418,7 +428,7 @@ print("\\n--- report head ---\\n", r["artifacts"].get("report_markdown", "")[:60
 ```
 
 ```python
-# 8) Privacy proof: ensure raw OCR snippet is NOT persisted in DB events
+# 9) Privacy proof: ensure raw OCR snippet is NOT persisted in DB events
 import json
 from pharmassist_api.cases.load_case import load_case_bundle
 
