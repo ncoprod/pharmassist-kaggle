@@ -160,12 +160,11 @@ cd /Users/nico/Documents/AI/pharmassist-kaggle
 make web-dev-full
 ```
 
-3) Verify counts:
+3) Verify load/counts with a single deterministic check:
 
 ```bash
-sqlite3 /tmp/pharmassist_full.db 'select count(*) from patients;'
-sqlite3 /tmp/pharmassist_full.db 'select count(*) from visits;'
-sqlite3 /tmp/pharmassist_full.db 'select count(*) from events;'
+cd /Users/nico/Documents/AI/pharmassist-kaggle
+make dataset-load-check
 ```
 
 Expected order of magnitude with `seed=2025`:
