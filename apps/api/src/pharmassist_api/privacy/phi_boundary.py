@@ -28,6 +28,25 @@ _PHI_LABEL_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+_DOB_HINT_RE = re.compile(
+    r"\b("
+    r"date\s*de\s*naissance|"
+    r"date\s*of\s*birth|"
+    r"dob|birth\s*date"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+
+_ADDRESS_HINT_RE = re.compile(
+    r"\b\d{1,5}\s+("
+    r"rue|avenue|av\.?|boulevard|bd\.?|chemin|route|impasse|all[ée]e|"
+    r"street|st\.?|road|rd\.?|lane|ln\.?|drive|dr\.?"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+
+_POSTAL_CITY_HINT_RE = re.compile(r"\b\d{5}\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ' -]{2,}\b")
+
 
 def scan_text(text: str, json_path: str) -> list[Violation]:
     """Scan an untrusted text blob for PHI-like content.
@@ -47,6 +66,33 @@ def scan_text(text: str, json_path: str) -> list[Violation]:
                     "Identifier-like field label detected in untrusted text "
                     "(e.g. 'nom:', 'email:')."
                 ),
+            )
+        )
+    if _DOB_HINT_RE.search(text):
+        violations.append(
+            Violation(
+                code="PHI_DOB_HINT",
+                severity="BLOCKER",
+                json_path=json_path,
+                message="Birth-date hint detected in untrusted text.",
+            )
+        )
+    if _ADDRESS_HINT_RE.search(text):
+        violations.append(
+            Violation(
+                code="PHI_ADDRESS_HINT",
+                severity="BLOCKER",
+                json_path=json_path,
+                message="Street-address hint detected in untrusted text.",
+            )
+        )
+    if _POSTAL_CITY_HINT_RE.search(text):
+        violations.append(
+            Violation(
+                code="PHI_POSTAL_CITY_HINT",
+                severity="BLOCKER",
+                json_path=json_path,
+                message="Postal-code + city hint detected in untrusted text.",
             )
         )
 

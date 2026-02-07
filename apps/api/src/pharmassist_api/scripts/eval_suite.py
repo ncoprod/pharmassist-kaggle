@@ -99,7 +99,13 @@ async def _run_case(case: EvalCase) -> dict[str, Any]:
     stored = db.get_run(run["run_id"])
     if not stored:
         raise RuntimeError(f"Run not found after execution: {run['run_id']}")
-    validate_instance(stored, "run")
+    schema_valid = True
+    schema_error = ""
+    try:
+        validate_instance(stored, "run")
+    except Exception as e:
+        schema_valid = False
+        schema_error = str(e)
 
     escalation = (
         stored.get("artifacts", {})
@@ -121,6 +127,8 @@ async def _run_case(case: EvalCase) -> dict[str, Any]:
         "language": case.language,
         "run_id": stored["run_id"],
         "status": stored["status"],
+        "schema_valid": schema_valid,
+        "schema_error": schema_error,
         "expected_escalation": case.expected_escalation,
         "actual_escalation": escalation_bool,
         "symptom_f1": _f1(got_labels, expected_labels),
@@ -147,13 +155,16 @@ def _write_markdown(*, out_path: Path, summary: dict[str, Any], rows: list[dict[
         f"- mean_symptom_f1: {summary['mean_symptom_f1']:.4f}",
         f"- p95_latency_ms: {summary['p95_latency_ms']:.2f}",
         "",
-        "| case_id | status | escalation(expected/actual) | symptom_f1 | latency_ms |",
-        "|---|---|---|---:|---:|",
+        (
+            "| case_id | status | schema_valid | escalation(expected/actual) | "
+            "symptom_f1 | latency_ms |"
+        ),
+        "|---|---|---|---|---:|---:|",
     ]
     for row in rows:
         lines.append(
             "| "
-            f"{row['case_id']} | {row['status']} | "
+            f"{row['case_id']} | {row['status']} | {row['schema_valid']} | "
             f"{row['expected_escalation']}/{row['actual_escalation']} | "
             f"{row['symptom_f1']:.4f} | {row['latency_ms']:.2f} |"
         )
@@ -166,10 +177,28 @@ async def _run_eval(out_dir: Path) -> dict[str, Any]:
 
     rows: list[dict[str, Any]] = []
     for case in CASES:
-        rows.append(await _run_case(case))
+        try:
+            rows.append(await _run_case(case))
+        except Exception as e:
+            rows.append(
+                {
+                    "case_id": case.case_id,
+                    "case_ref": case.case_ref,
+                    "language": case.language,
+                    "run_id": "",
+                    "status": "error",
+                    "schema_valid": False,
+                    "schema_error": str(e),
+                    "expected_escalation": case.expected_escalation,
+                    "actual_escalation": False,
+                    "symptom_f1": 0.0,
+                    "latency_ms": 0.0,
+                }
+            )
 
     completed = [r for r in rows if r["status"] == "completed"]
-    schema_valid_rate = len(rows) / len(rows) if rows else 0.0
+    schema_valid_rows = [r for r in rows if bool(r.get("schema_valid"))]
+    schema_valid_rate = (len(schema_valid_rows) / len(rows)) if rows else 0.0
     redflag_expected = [r for r in rows if r["expected_escalation"]]
     redflag_tp = [r for r in redflag_expected if r["actual_escalation"]]
     red_flag_recall = (len(redflag_tp) / len(redflag_expected)) if redflag_expected else 1.0
