@@ -249,20 +249,19 @@ Suggested notebook cells (in order):
 
 ```python
 # 2) Load HF token from Kaggle Secrets (create a secret named "HF_TOKEN")
-#    Note: Kaggle secrets backend can intermittently fail. We retry and keep notebook runnable.
+#    This is required: if the token cannot be fetched, fail fast (no SKIP mode).
 import os
 import time
 
 HF_TOKEN_OK = False
 
-def load_hf_token(max_attempts=3):
+def load_hf_token(max_attempts=8):
     if os.environ.get("HF_TOKEN"):
         return True
     try:
         from kaggle_secrets import UserSecretsClient
     except Exception as exc:
-        print("kaggle_secrets unavailable:", exc)
-        return False
+        raise RuntimeError(f"kaggle_secrets unavailable: {exc}") from exc
     for attempt in range(1, max_attempts + 1):
         try:
             token = UserSecretsClient().get_secret("HF_TOKEN")
@@ -271,11 +270,15 @@ def load_hf_token(max_attempts=3):
                 return True
         except Exception as exc:
             print(f"HF_TOKEN fetch attempt {attempt}/{max_attempts} failed: {exc}")
-            time.sleep(attempt * 2)
+            time.sleep(min(20, attempt * 3))
     return False
 
 HF_TOKEN_OK = load_hf_token()
 print("HF_TOKEN loaded:", HF_TOKEN_OK)
+if not HF_TOKEN_OK:
+    raise RuntimeError(
+        "HF_TOKEN is required for MedGemma GPU smoke. Configure Kaggle secret HF_TOKEN and rerun."
+    )
 ```
 
 ```python
@@ -304,37 +307,38 @@ else:
 
 ```python
 # 5) Run MedGemma extraction smoke test (validates JSON against schema)
-#    If HF token isn't available, explicitly skip this step.
+#    This step is mandatory and must PASS.
 import os
 import subprocess
 import sys
 
-if HF_TOKEN_OK:
-    cmd = [
-        sys.executable,
-        "-m",
-        "pharmassist_api.scripts.haidef_smoke",
-        "--model",
-        "google/medgemma-4b-it",
-        "--mode",
-        "conditional",
-        "--case-ref",
-        "case_000042",
-        "--language",
-        "en",
-        "--max-new-tokens",
-        "256",
-        "--debug",
-    ]
-    env = dict(os.environ)
-    env["PYTHONPATH"] = "apps/api/src"
-    proc = subprocess.run(cmd, env=env, text=True, capture_output=True)
-    print(proc.stdout)
-    print("HAIDEF_SMOKE_STATUS:", "PASS" if proc.returncode == 0 else "FAIL")
-    if proc.returncode != 0:
-        print(proc.stderr)
-else:
-    print("HAIDEF_SMOKE_STATUS: SKIP (HF_TOKEN unavailable)")
+if not os.environ.get("HF_TOKEN"):
+    raise RuntimeError("HF_TOKEN missing in environment")
+
+cmd = [
+    sys.executable,
+    "-m",
+    "pharmassist_api.scripts.haidef_smoke",
+    "--model",
+    "google/medgemma-4b-it",
+    "--mode",
+    "conditional",
+    "--case-ref",
+    "case_000042",
+    "--language",
+    "en",
+    "--max-new-tokens",
+    "256",
+    "--debug",
+]
+env = dict(os.environ)
+env["PYTHONPATH"] = "apps/api/src"
+proc = subprocess.run(cmd, env=env, text=True, capture_output=True)
+print(proc.stdout)
+print("HAIDEF_SMOKE_STATUS:", "PASS" if proc.returncode == 0 else "FAIL")
+if proc.returncode != 0:
+    print(proc.stderr)
+    raise RuntimeError("MedGemma smoke test failed")
 ```
 
 ```python
