@@ -9,8 +9,15 @@ from typing import Any
 
 
 def repo_root() -> Path:
-    # apps/api/src/pharmassist_api/db.py -> repo root
-    return Path(__file__).resolve().parents[5]
+    # Locate the repository root robustly from this file location.
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "apps" / "api" / "src" / "pharmassist_api").exists() and (
+            parent / "packages" / "contracts"
+        ).exists():
+            return parent
+    # Fallback for unexpected layouts.
+    return current.parents[4]
 
 
 def db_path() -> Path:
