@@ -61,3 +61,8 @@ def test_phi_boundary_blocks_birth_date_without_colon():
 def test_phi_boundary_blocks_street_address_without_label():
     with pytest.raises(PhiBoundaryError):
         raise_if_phi("15 rue de Vaugirard 75015 Paris", "$.intake_text_ocr")
+
+
+def test_phi_boundary_blocks_postal_city_hint():
+    with pytest.raises(PhiBoundaryError):
+        raise_if_phi("Disponible en pharmacie 75015 Paris", "$.intake_text_ocr")
