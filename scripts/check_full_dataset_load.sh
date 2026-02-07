@@ -21,6 +21,21 @@ for f in "${required[@]}"; do
   fi
 done
 
+# Some macOS shells inherit a low soft nofile limit (e.g. 256) that can
+# intermittently break large validation passes with Errno 24.
+MIN_NOFILE="${MIN_NOFILE:-4096}"
+CURRENT_NOFILE="$(ulimit -Sn)"
+if [[ "${CURRENT_NOFILE}" -lt "${MIN_NOFILE}" ]]; then
+  if ulimit -Sn "${MIN_NOFILE}" 2>/dev/null; then
+    CURRENT_NOFILE="$(ulimit -Sn)"
+    echo "[dataset-check] raised open files soft limit to ${CURRENT_NOFILE}"
+  else
+    echo "[dataset-check] soft open files limit too low (${CURRENT_NOFILE}), cannot raise to ${MIN_NOFILE}"
+    echo "[dataset-check] run: ulimit -n ${MIN_NOFILE} (or higher) and retry"
+    exit 1
+  fi
+fi
+
 mkdir -p "$(dirname "${DB_PATH}")"
 if [[ -d "${DB_PATH}" ]]; then
   echo "[dataset-check] DB_PATH points to a directory: ${DB_PATH}"
