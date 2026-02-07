@@ -15,6 +15,21 @@ LOG_PATH="${LOG_PATH:-${ROOT}/.data/redteam_api.log}"
 mkdir -p "${ROOT}/.data"
 rm -f "${DB_PATH}"
 
+# macOS shells can inherit a low soft nofile limit (e.g. 256) from launchctl.
+# Uvicorn/FastAPI startup may then fail before health checks with Errno 24.
+MIN_NOFILE="${MIN_NOFILE:-4096}"
+CURRENT_NOFILE="$(ulimit -Sn)"
+if [[ "${CURRENT_NOFILE}" -lt "${MIN_NOFILE}" ]]; then
+  if ulimit -Sn "${MIN_NOFILE}" 2>/dev/null; then
+    CURRENT_NOFILE="$(ulimit -Sn)"
+    echo "[redteam] raised open files soft limit to ${CURRENT_NOFILE}"
+  else
+    echo "[redteam] soft open files limit too low (${CURRENT_NOFILE}), cannot raise to ${MIN_NOFILE}"
+    echo "[redteam] run: ulimit -n ${MIN_NOFILE} (or higher) and retry"
+    exit 1
+  fi
+fi
+
 echo "[redteam] starting API on ${API_BASE}"
 PYTHONPATH=apps/api/src \
 PHARMASSIST_DB_PATH="${DB_PATH}" \
