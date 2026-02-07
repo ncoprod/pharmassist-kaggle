@@ -51,6 +51,10 @@ DB viewer:
 To use a larger dataset, download it locally and point:
 - `PHARMASSIST_PHARMACY_DATA_DIR=/path/to/dataset_dir` (must contain `patients.jsonl.gz`, `visits.jsonl.gz`, `events.jsonl.gz`, `inventory.jsonl.gz`)
 
+For a full local demo (Paris15 synthetic year), the repo also provides convenience targets:
+- `make api-dev-full`
+- `make web-dev-full`
+
 ## Local Dev (no model download)
 
 Prereqs:
@@ -113,6 +117,40 @@ PHARMASSIST_API_KEY='change-me' PHARMASSIST_ADMIN_API_KEY='change-me' make e2e
 ```
 
 For manual UI testing, run `make api-dev` and `make web-dev` in separate terminals.
+
+### Full Demo (local, large dataset)
+
+1) Generate the full synthetic dataset (in `pharmassist-synthdata`):
+
+```bash
+cd /Users/nico/Documents/AI/pharmassist-synthdata
+.venv/bin/pharmassist-synthdata sim-year --seed 2025 --pharmacy paris15 --year 2025 --out /tmp/paris15_full
+```
+
+2) Run API + web with full-dataset defaults (in `pharmassist-kaggle`):
+
+```bash
+cd /Users/nico/Documents/AI/pharmassist-kaggle
+make api-dev-full
+```
+
+```bash
+cd /Users/nico/Documents/AI/pharmassist-kaggle
+make web-dev-full
+```
+
+3) Verify counts:
+
+```bash
+sqlite3 /tmp/pharmassist_full.db 'select count(*) from patients;'
+sqlite3 /tmp/pharmassist_full.db 'select count(*) from visits;'
+sqlite3 /tmp/pharmassist_full.db 'select count(*) from events;'
+```
+
+Expected order of magnitude with `seed=2025`:
+- `patients ~ 10k`
+- `visits ~ 66k`
+- `events ~ 118k`
 
 ## Security / Red-Team checks
 
