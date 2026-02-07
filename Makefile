@@ -1,4 +1,4 @@
-.PHONY: help setup api-install api-dev api-dev-full api-lint web-install web-dev web-dev-full web-build web-lint lint build
+.PHONY: help setup api-install api-dev api-dev-full api-lint web-install web-dev web-dev-full web-build web-lint lint build dataset-fetch
 .PHONY: e2e redteam security-audit
 .PHONY: validate eval demo-replay
 
@@ -18,6 +18,7 @@ help:
 	@echo "  web-dev-full- Run web dev server preconfigured for api-dev-full"
 	@echo "  lint        - Lint API + web"
 	@echo "  build       - Build web"
+	@echo "  dataset-fetch - Download pinned full demo dataset from Kaggle"
 	@echo "  eval        - Run deterministic evaluation harness (no GPU)"
 	@echo "  demo-replay - Produce reproducible replay artifacts (no GPU)"
 
@@ -78,3 +79,6 @@ eval: $(VENV_DIR)
 
 demo-replay: $(VENV_DIR)
 	PYTHONPATH=apps/api/src $(VENV_DIR)/bin/python -m pharmassist_api.scripts.demo_replay --out .data/demo_replay/latest
+
+dataset-fetch:
+	./scripts/fetch_paris15_dataset.sh .data/paris15_full

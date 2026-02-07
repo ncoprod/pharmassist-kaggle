@@ -132,18 +132,27 @@ For manual UI testing, run `make api-dev` and `make web-dev` in separate termina
 
 ### Full Demo (local, large dataset)
 
-1) Generate the full synthetic dataset (in `pharmassist-synthdata`):
+1) Prepare the full dataset (choose one option):
+
+Option A — fetch the pinned Kaggle dataset:
+
+```bash
+cd /Users/nico/Documents/AI/pharmassist-kaggle
+KAGGLE_USERNAME='YOUR_USERNAME' KAGGLE_KEY='YOUR_KEY' make dataset-fetch
+```
+
+Option B — generate it locally from `pharmassist-synthdata`:
 
 ```bash
 cd /Users/nico/Documents/AI/pharmassist-synthdata
-.venv/bin/pharmassist-synthdata sim-year --seed 2025 --pharmacy paris15 --year 2025 --out /tmp/paris15_full
+.venv/bin/pharmassist-synthdata sim-year --seed 2025 --pharmacy paris15 --year 2025 --out /Users/nico/Documents/AI/pharmassist-kaggle/.data/paris15_full
 ```
 
 2) Run API + web with full-dataset defaults (in `pharmassist-kaggle`):
 
 ```bash
 cd /Users/nico/Documents/AI/pharmassist-kaggle
-make api-dev-full
+DEMO_DATA_DIR='.data/paris15_full' make api-dev-full
 ```
 
 ```bash

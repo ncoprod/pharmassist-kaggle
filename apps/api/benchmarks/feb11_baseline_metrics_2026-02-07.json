@@ -1,0 +1,20 @@
+{
+  "baseline_date_utc": "2026-02-07",
+  "source_commit": "5fdecd01cd4e10d38c8c9ad5c73519079d6abdee",
+  "source_command": "make eval",
+  "source_summary_path": ".data/eval/latest/summary.json",
+  "metrics": {
+    "total_cases": 4,
+    "completed_cases": 4,
+    "schema_valid_rate": 1.0,
+    "red_flag_recall": 1.0,
+    "mean_symptom_f1": 0.625,
+    "p95_latency_ms": 1214.61
+  },
+  "fine_tune_readiness_thresholds": {
+    "schema_valid_rate_min": 0.99,
+    "red_flag_recall_min": 1.0,
+    "mean_symptom_f1_min": 0.55,
+    "p95_latency_ms_max": 45000.0
+  }
+}
