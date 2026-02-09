@@ -38,13 +38,15 @@ def compose_prebrief(
         if not isinstance(ranked, dict):
             continue
         sku = str(ranked.get("product_sku") or "").strip()
+        name = str(ranked.get("product_name") or "").strip()
         why = str(ranked.get("why") or "").strip()
         refs = [r for r in (ranked.get("evidence_refs") or []) if isinstance(r, str)]
         if sku:
-            label = f"{sku}: {why}".strip()
+            label_head = f"{name} ({sku})" if name else sku
+            label = f"{label_head}: {why}".strip()
             top_actions.append(label)
             if refs:
-                new_rx_delta.append(f"{sku} evidence: {', '.join(refs[:2])}")
+                new_rx_delta.append(f"{label_head} evidence: {', '.join(refs[:2])}")
 
     for warning in recommendation.get("safety_warnings") or []:
         if not isinstance(warning, dict):

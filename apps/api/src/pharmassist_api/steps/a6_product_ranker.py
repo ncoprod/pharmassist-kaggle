@@ -93,9 +93,11 @@ def rank_products(
 
     ranked_products: list[dict[str, Any]] = []
     for score, p, why in top:
+        product_name = str(p.get("name") or "").strip()
         ranked_products.append(
             {
                 "product_sku": p["sku"],
+                **({"product_name": product_name} if product_name else {}),
                 "score_0_100": int(score),
                 "why": why,
             }

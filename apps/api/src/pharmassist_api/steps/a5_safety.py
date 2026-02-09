@@ -41,6 +41,7 @@ def compute_safety_warnings(
         p = products_by_sku.get(sku)
         if not isinstance(p, dict):
             continue
+        product_name = str(p.get("name") or "").strip()
 
         tags = p.get("contraindication_tags") or []
 
@@ -51,6 +52,7 @@ def compute_safety_warnings(
                     "severity": "BLOCKER",
                     "message": "Patient allergy may match a product ingredient.",
                     "related_product_sku": sku,
+                    **({"related_product_name": product_name} if product_name else {}),
                 }
             )
 
@@ -63,6 +65,7 @@ def compute_safety_warnings(
                         "Pregnancy status is unknown. Confirm before recommending if relevant."
                     ),
                     "related_product_sku": sku,
+                    **({"related_product_name": product_name} if product_name else {}),
                 }
             )
 
@@ -73,6 +76,7 @@ def compute_safety_warnings(
                     "severity": "BLOCKER",
                     "message": "Contraindicated in pregnancy.",
                     "related_product_sku": sku,
+                    **({"related_product_name": product_name} if product_name else {}),
                 }
             )
 

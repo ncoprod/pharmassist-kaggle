@@ -841,6 +841,7 @@ def _dedupe_warnings(warnings: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if existing_sku != next_sku:
             # More than one SKU maps to this warning; keep it generic.
             existing.pop("related_product_sku", None)
+            existing.pop("related_product_name", None)
     return out
 
 

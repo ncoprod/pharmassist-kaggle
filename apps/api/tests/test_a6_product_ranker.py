@@ -21,6 +21,7 @@ def test_ranker_returns_schema_valid_ranked_products_for_allergy_case():
     assert ranked and len(ranked) <= 3
     for item in ranked:
         assert isinstance(item.get("product_sku"), str) and item["product_sku"]
+        assert isinstance(item.get("product_name"), str) and item["product_name"]
         assert isinstance(item.get("score_0_100"), int)
         assert isinstance(item.get("why"), str) and item["why"]
 

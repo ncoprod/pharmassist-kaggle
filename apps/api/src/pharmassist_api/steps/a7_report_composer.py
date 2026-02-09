@@ -19,6 +19,14 @@ def _safe_text(value: Any) -> str:
     return text.replace("<", "‹").replace(">", "›").strip()
 
 
+def _product_label(item: dict[str, Any]) -> str:
+    sku = _safe_text(item.get("product_sku"))
+    name = _safe_text(item.get("product_name"))
+    if name and sku:
+        return f"{name} ({sku})"
+    return name or sku
+
+
 def compose_report_markdown(
     *,
     intake_extracted: dict[str, Any],
@@ -126,7 +134,7 @@ def _build_report_prompt(
     for p in recommendation.get("ranked_products") or []:
         if isinstance(p, dict):
             lines.append(
-                f"- product {_safe_text(p.get('product_sku'))}: "
+                f"- product {_product_label(p)}: "
                 f"score={_safe_text(p.get('score_0_100'))} "
                 f"why={_safe_text(p.get('why'))}"
             )
@@ -208,12 +216,12 @@ def _render_report_template(
         for p in ranked:
             if not isinstance(p, dict):
                 continue
-            sku = _safe_text(p.get("product_sku"))
+            label = _product_label(p)
             score = _safe_text(p.get("score_0_100"))
             why = _safe_text(p.get("why"))
             refs = [r for r in (p.get("evidence_refs") or []) if isinstance(r, str)]
             cite = " ".join([f"[{r}]" for r in refs]) if refs else ""
-            lines.append(f"- {sku} (score {score}): {why} {cite}".strip())
+            lines.append(f"- {label} (score {score}): {why} {cite}".strip())
 
     lines.append("")
     lines.append("## Safety" if language == "en" else "## Securite")

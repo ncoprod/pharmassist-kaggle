@@ -3,6 +3,7 @@
   "ranked_products": [
     {
       "product_sku": "SKU-0001",
+      "product_name": "Cetirizine 10 mg comprimé",
       "score_0_100": 92,
       "why": "Best match for sneezing/itchy eyes with good tolerability (synthetic example).",
       "evidence_refs": ["ev_0001"]
@@ -13,7 +14,8 @@
       "code": "PREGNANCY_STATUS_UNKNOWN",
       "message": "Pregnancy status is unknown. Confirm before recommending if relevant.",
       "severity": "WARN",
-      "related_product_sku": "SKU-0001"
+      "related_product_sku": "SKU-0001",
+      "related_product_name": "Cetirizine 10 mg comprimé"
     }
   ],
   "follow_up_questions": [

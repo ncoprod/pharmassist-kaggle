@@ -1253,6 +1253,7 @@ def _preview_inventory(
         out.append(
             {
                 "sku": row["sku"],
+                "name": str(product.get("name") or ""),
                 "category": str(product.get("category") or ""),
                 "in_stock": bool(product.get("in_stock")),
                 "stock_qty": int(product.get("stock_qty"))
@@ -1265,7 +1266,7 @@ def _preview_inventory(
         )
 
     return (
-        ["sku", "category", "in_stock", "stock_qty", "price_eur"],
+        ["sku", "name", "category", "in_stock", "stock_qty", "price_eur"],
         out,
         int(count["c"]) if count else 0,
     )

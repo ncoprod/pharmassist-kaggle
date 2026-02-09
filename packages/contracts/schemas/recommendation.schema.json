@@ -25,6 +25,10 @@
           "product_sku": {
             "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
           },
+          "product_name": {
+            "type": "string",
+            "maxLength": 300
+          },
           "score_0_100": {
             "type": "integer",
             "minimum": 0,
@@ -62,6 +66,10 @@
           },
           "related_product_sku": {
             "type": "string"
+          },
+          "related_product_name": {
+            "type": "string",
+            "maxLength": 300
           }
         }
       }

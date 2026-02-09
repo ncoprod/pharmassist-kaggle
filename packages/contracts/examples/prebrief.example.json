@@ -2,7 +2,7 @@
   "schema_version": "0.0.0",
   "top_actions": [
     "Escalade recommandee: Medecin (24h)",
-    "SKU-0001: option OTC principale",
+    "Cetirizine 10 mg comprimé (SKU-0001): option OTC principale",
     "Verifier contre-indications avant delivrance"
   ],
   "top_risks": [
@@ -18,7 +18,7 @@
     "retrieved=5"
   ],
   "new_rx_delta": [
-    "SKU-0001 evidence: ev_0001",
+    "Cetirizine 10 mg comprimé (SKU-0001) evidence: ev_0001",
     "Blocker: dyspnee"
   ]
 }
