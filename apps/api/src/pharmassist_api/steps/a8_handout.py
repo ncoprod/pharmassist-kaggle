@@ -11,6 +11,14 @@ def _safe_text(value: Any) -> str:
     return str(value or "").replace("<", "‹").replace(">", "›").strip()
 
 
+def _product_label(item: dict[str, Any]) -> str:
+    sku = _safe_text(item.get("product_sku"))
+    name = _safe_text(item.get("product_name"))
+    if name and sku:
+        return f"{name} ({sku})"
+    return name or sku
+
+
 def compose_handout_markdown(
     *,
     recommendation: dict[str, Any] | None,
@@ -49,7 +57,7 @@ def compose_handout_markdown(
         lines.append("## Suggested products" if language == "en" else "## Produits proposes")
         for p in ranked[:3]:
             if isinstance(p, dict):
-                lines.append(f"- {_safe_text(p.get('product_sku'))}: {_safe_text(p.get('why'))}")
+                lines.append(f"- {_product_label(p)}: {_safe_text(p.get('why'))}")
 
     lines.append("")
     lines.append("## What to do now" if language == "en" else "## A faire")

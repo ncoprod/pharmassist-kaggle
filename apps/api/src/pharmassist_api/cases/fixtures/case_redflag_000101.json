@@ -54,7 +54,7 @@
       "ingredients": [
         "cetirizine"
       ],
-      "name": "Cetirizine 10mg (example)",
+      "name": "Cetirizine Viatris 10 mg comprime",
       "price_eur": 4.99,
       "schema_version": "0.0.0",
       "sku": "SKU-0001",
@@ -68,7 +68,7 @@
       "ingredients": [
         "sodium_chloride"
       ],
-      "name": "Saline nasal spray (example)",
+      "name": "Sterimar Spray Nasal Physiologique",
       "price_eur": 3.5,
       "schema_version": "0.0.0",
       "sku": "SKU-0002",
@@ -83,7 +83,7 @@
         "glycerin",
         "urea"
       ],
-      "name": "Moisturizing cream (example)",
+      "name": "Dexeryl Creme Emolliente",
       "price_eur": 7.9,
       "schema_version": "0.0.0",
       "sku": "SKU-0003",
@@ -97,7 +97,7 @@
       "ingredients": [
         "emollient"
       ],
-      "name": "Emollient balm (example)",
+      "name": "Lipikar Baume AP+M",
       "price_eur": 9.9,
       "schema_version": "0.0.0",
       "sku": "SKU-0004",
@@ -113,7 +113,7 @@
       "ingredients": [
         "simethicone"
       ],
-      "name": "Simethicone 80mg (example)",
+      "name": "Meteoxane Simeticone 80 mg",
       "price_eur": 5.5,
       "schema_version": "0.0.0",
       "sku": "SKU-0005",
@@ -127,7 +127,7 @@
       "ingredients": [
         "probiotic"
       ],
-      "name": "Probiotic capsules (example)",
+      "name": "Lactibiane Reference Gelules",
       "price_eur": 12.9,
       "schema_version": "0.0.0",
       "sku": "SKU-0006",
@@ -141,7 +141,7 @@
       "ingredients": [
         "oral_rehydration_salts"
       ],
-      "name": "Oral rehydration salts (example)",
+      "name": "Adiaril Solution de Rehydratation Orale",
       "price_eur": 6.2,
       "schema_version": "0.0.0",
       "sku": "SKU-0007",
@@ -155,7 +155,7 @@
       "ingredients": [
         "vitamin_d3"
       ],
-      "name": "Vitamin D3 (example)",
+      "name": "ZymaD Vitamine D3 gouttes",
       "price_eur": 8.8,
       "schema_version": "0.0.0",
       "sku": "SKU-0008",

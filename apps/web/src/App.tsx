@@ -15,6 +15,7 @@ type FollowUpQuestion = {
 
 type RankedProduct = {
   product_sku: string
+  product_name?: string
   score_0_100: number
   why: string
   evidence_refs?: string[]
@@ -25,6 +26,7 @@ type SafetyWarning = {
   message: string
   severity: 'BLOCKER' | 'WARN'
   related_product_sku?: string
+  related_product_name?: string
 }
 
 type Escalation = {
@@ -236,6 +238,13 @@ function topNUnique(items: string[], n: number): string[] {
   return out
 }
 
+function formatProductLabel(productSku?: string, productName?: string): string {
+  const sku = (productSku ?? '').trim()
+  const name = (productName ?? '').trim()
+  if (name && sku) return `${name} (${sku})`
+  return name || sku || '—'
+}
+
 function buildAtAGlance(run: Run | null, language: 'fr' | 'en'): AtAGlance {
   const prebrief = run?.artifacts?.prebrief
   if (prebrief) {
@@ -264,15 +273,17 @@ function buildAtAGlance(run: Run | null, language: 'fr' | 'en'): AtAGlance {
   }
 
   for (const p of recommendation?.ranked_products ?? []) {
+    const label = formatProductLabel(p.product_sku, p.product_name)
     actionsRaw.push(
       language === 'fr'
-        ? `Produit ${p.product_sku}: ${p.why}`
-        : `Product ${p.product_sku}: ${p.why}`,
+        ? `Produit ${label}: ${p.why}`
+        : `Product ${label}: ${p.why}`,
     )
   }
 
   for (const w of recommendation?.safety_warnings ?? []) {
-    risksRaw.push(`${w.severity}: ${w.message}${w.related_product_sku ? ` (${w.related_product_sku})` : ''}`)
+    const related = formatProductLabel(w.related_product_sku, w.related_product_name)
+    risksRaw.push(`${w.severity}: ${w.message}${w.related_product_sku || w.related_product_name ? ` (${related})` : ''}`)
     rxDeltaRaw.push(`${w.severity}: ${w.message}`)
   }
 
@@ -1339,6 +1350,9 @@ function App() {
               <div className="muted">
                 Redacted preview only. No raw OCR/PDF text and no PHI payloads are exposed.
               </div>
+              <div className="muted small">
+                Tip: use table <span className="mono">inventory</span> to inspect medication names and stock.
+              </div>
             </section>
 
             <section className="panel">
@@ -1598,7 +1612,9 @@ function App() {
                           </span>
                           <span className="warningMsg">
                             {w.message}
-                            {w.related_product_sku ? ` (${w.related_product_sku})` : ''}
+                            {w.related_product_sku || w.related_product_name
+                              ? ` (${formatProductLabel(w.related_product_sku, w.related_product_name)})`
+                              : ''}
                           </span>
                         </div>
                       ))}
@@ -1613,7 +1629,7 @@ function App() {
                       {rankedProducts.map((p) => (
                         <div key={p.product_sku} className="productCard">
                           <div className="productTop">
-                            <span className="mono">{p.product_sku}</span>
+                            <span>{formatProductLabel(p.product_sku, p.product_name)}</span>
                             <span className="score">{p.score_0_100}</span>
                           </div>
                           <div className="productWhy">{p.why}</div>

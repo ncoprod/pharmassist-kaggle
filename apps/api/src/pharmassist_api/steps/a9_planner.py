@@ -23,6 +23,14 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _product_label(item: dict[str, Any]) -> str:
+    sku = str(item.get("product_sku") or "").strip()
+    name = str(item.get("product_name") or "").strip()
+    if name and sku:
+        return f"{name} ({sku})"
+    return name or sku
+
+
 def planner_feature_enabled() -> bool:
     return (os.getenv("PHARMASSIST_USE_AGENTIC_PLANNER") or "").strip() == "1"
 
@@ -68,6 +76,7 @@ def _fallback_plan(
         if not isinstance(ranked, dict):
             continue
         sku = str(ranked.get("product_sku") or "").strip()
+        label = _product_label(ranked)
         why = str(ranked.get("why") or "").strip()
         if not sku:
             continue
@@ -75,7 +84,7 @@ def _fallback_plan(
             {
                 "step_id": f"otc-{len(steps) + 1}",
                 "kind": "otc_suggestion",
-                "title": f"OTC {sku}",
+                "title": f"OTC {label}",
                 "detail": (
                     why
                     or (
@@ -246,7 +255,7 @@ def _build_prompt(*, recommendation: dict[str, Any] | None, language: Language) 
     for p in recommendation.get("ranked_products") or []:
         if isinstance(p, dict):
             lines.append(
-                f"- product: {p.get('product_sku')} "
+                f"- product: {_product_label(p)} "
                 f"why={p.get('why')} refs={p.get('evidence_refs')}"
             )
 
