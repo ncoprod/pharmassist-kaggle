@@ -62,6 +62,28 @@ def test_endpoints_require_api_key_when_configured(tmp_path, monkeypatch):
         get_ok = client.get(f"/runs/{run_id}", headers={"X-Api-Key": "appsecret"})
         assert get_ok.status_code == 200
 
+        inbox_denied = client.get("/patients/inbox")
+        assert inbox_denied.status_code == 401
+        inbox_ok = client.get("/patients/inbox", headers={"X-Api-Key": "appsecret"})
+        assert inbox_ok.status_code == 200
+
+        status_denied = client.get("/patients/pt_000000/analysis-status")
+        assert status_denied.status_code == 401
+        status_ok = client.get(
+            "/patients/pt_000000/analysis-status",
+            headers={"X-Api-Key": "appsecret"},
+        )
+        assert status_ok.status_code == 200
+
+        refresh_denied = client.post("/patients/pt_000000/refresh", json={"reason": "auth-test"})
+        assert refresh_denied.status_code == 401
+        refresh_ok = client.post(
+            "/patients/pt_000000/refresh",
+            json={"reason": "auth-test"},
+            headers={"X-Api-Key": "appsecret"},
+        )
+        assert refresh_ok.status_code == 200
+
         upload_denied = client.post(
             "/documents/prescription",
             data={"patient_ref": "pt_000000", "language": "en"},

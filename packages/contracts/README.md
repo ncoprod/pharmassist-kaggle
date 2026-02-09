@@ -13,6 +13,10 @@ Key schemas:
 - `evidence_item.schema.json`: citations/provenance
 - `trace.schema.json`: agentic trace (no raw prompts)
 - `run.schema.json`: end-to-end run state + policy violations
+- `prebrief.schema.json`: at-a-glance summary used by the judge-facing UI
+- `planner_plan.schema.json`: feature-flagged planner artifact (agentic + deterministic fallback)
+- `patient_analysis_status.schema.json`: refresh state for patient auto-analysis
+- `patient_inbox.schema.json`: "new changes since last analysis" inbox payload
 - `pharmacy_event_payload.schema.json`: strict allowlist payloads for synthetic pharmacy events
 - `db_preview.schema.json`: redacted read-only admin preview payload
 - `document_upload_receipt.schema.json`: metadata-only response for prescription PDF ingestion

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/prebrief.schema.json",
+  "title": "Prebrief (at-a-glance summary for pharmacist)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "top_actions",
+    "top_risks",
+    "top_questions",
+    "what_changed",
+    "new_rx_delta"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "top_actions": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "top_risks": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "top_questions": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "what_changed": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "new_rx_delta": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    }
+  }
+}

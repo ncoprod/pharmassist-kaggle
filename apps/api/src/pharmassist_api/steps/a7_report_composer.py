@@ -13,6 +13,12 @@ SCHEMA_VERSION = "0.0.0"
 Language = Literal["fr", "en"]
 
 
+def _safe_text(value: Any) -> str:
+    text = str(value or "")
+    # Keep markdown renderers safe by neutralizing raw HTML/script tags.
+    return text.replace("<", "‹").replace(">", "›").strip()
+
+
 def compose_report_markdown(
     *,
     intake_extracted: dict[str, Any],
@@ -106,34 +112,42 @@ def _build_report_prompt(
     lines.append(f"Language: {language}")
     lines.append("")
     lines.append("Intake (structured):")
-    lines.append(f"- presenting_problem: {intake_extracted.get('presenting_problem')}")
+    lines.append(f"- presenting_problem: {_safe_text(intake_extracted.get('presenting_problem'))}")
     lines.append("- symptoms:")
     for s in intake_extracted.get("symptoms") or []:
         if isinstance(s, dict):
             lines.append(
-                f"  - {s.get('label')} "
-                f"(severity={s.get('severity')}, duration_days={s.get('duration_days')})"
+                f"  - {_safe_text(s.get('label'))} "
+                f"(severity={_safe_text(s.get('severity'))}, "
+                f"duration_days={_safe_text(s.get('duration_days'))})"
             )
     lines.append("")
     lines.append("Recommendation (structured):")
     for p in recommendation.get("ranked_products") or []:
         if isinstance(p, dict):
             lines.append(
-                f"- product {p.get('product_sku')}: "
-                f"score={p.get('score_0_100')} why={p.get('why')}"
+                f"- product {_safe_text(p.get('product_sku'))}: "
+                f"score={_safe_text(p.get('score_0_100'))} "
+                f"why={_safe_text(p.get('why'))}"
             )
             refs = p.get("evidence_refs") or []
             if refs:
                 lines.append(f"  evidence_refs: {', '.join([str(r) for r in refs])}")
     esc = recommendation.get("escalation")
     if isinstance(esc, dict) and esc.get("recommended") is True:
-        lines.append(f"- escalation: {esc.get('suggested_service')} reason={esc.get('reason')}")
+        lines.append(
+            f"- escalation: {_safe_text(esc.get('suggested_service'))} "
+            f"reason={_safe_text(esc.get('reason'))}"
+        )
     lines.append("")
     lines.append("Evidence (allowed citations):")
     for ev in evidence_items[:10]:
         if isinstance(ev, dict):
-            lines.append(f"- [{ev.get('evidence_id')}] {ev.get('title')} ({ev.get('publisher')})")
-            lines.append(f"  summary: {ev.get('summary')}")
+            lines.append(
+                f"- [{_safe_text(ev.get('evidence_id'))}] {_safe_text(ev.get('title'))} "
+                f"({_safe_text(ev.get('publisher'))})"
+            )
+            lines.append(f"  summary: {_safe_text(ev.get('summary'))}")
     lines.append("")
     lines.append(
         "Write a concise pharmacist report in markdown with sections: "
@@ -167,12 +181,12 @@ def _render_report_template(
     lines.append("")
 
     lines.append("## Summary" if language == "en" else "## Synthese")
-    lines.append(f"- Presenting problem: {intake_extracted.get('presenting_problem')}")
+    lines.append(f"- Presenting problem: {_safe_text(intake_extracted.get('presenting_problem'))}")
 
     symptoms = []
     for s in intake_extracted.get("symptoms") or []:
         if isinstance(s, dict) and isinstance(s.get("label"), str):
-            symptoms.append(s["label"])
+            symptoms.append(_safe_text(s["label"]))
     if symptoms:
         lines.append(f"- Symptoms: {', '.join(symptoms)}")
 
@@ -180,7 +194,10 @@ def _render_report_template(
     if isinstance(esc, dict) and esc.get("recommended") is True:
         lines.append("")
         lines.append("## Escalation" if language == "en" else "## Escalade")
-        lines.append(f"- {esc.get('suggested_service')}: {esc.get('reason')}")
+        lines.append(
+            f"- {_safe_text(esc.get('suggested_service'))}: "
+            f"{_safe_text(esc.get('reason'))}"
+        )
 
     lines.append("")
     lines.append("## Recommendations" if language == "en" else "## Recommandations")
@@ -191,9 +208,9 @@ def _render_report_template(
         for p in ranked:
             if not isinstance(p, dict):
                 continue
-            sku = p.get("product_sku")
-            score = p.get("score_0_100")
-            why = p.get("why")
+            sku = _safe_text(p.get("product_sku"))
+            score = _safe_text(p.get("score_0_100"))
+            why = _safe_text(p.get("why"))
             refs = [r for r in (p.get("evidence_refs") or []) if isinstance(r, str)]
             cite = " ".join([f"[{r}]" for r in refs]) if refs else ""
             lines.append(f"- {sku} (score {score}): {why} {cite}".strip())
@@ -206,7 +223,10 @@ def _render_report_template(
     else:
         for w in warnings:
             if isinstance(w, dict):
-                lines.append(f"- {w.get('severity')}: {w.get('code')} - {w.get('message')}")
+                lines.append(
+                    f"- {_safe_text(w.get('severity'))}: "
+                    f"{_safe_text(w.get('code'))} - {_safe_text(w.get('message'))}"
+                )
 
     lines.append("")
     lines.append("## Evidence" if language == "en" else "## Sources")
@@ -216,10 +236,10 @@ def _render_report_template(
         for ev in evidence_items:
             if not isinstance(ev, dict):
                 continue
-            ev_id = ev.get("evidence_id")
-            title_ev = ev.get("title")
-            pub = ev.get("publisher")
-            url = ev.get("url")
+            ev_id = _safe_text(ev.get("evidence_id"))
+            title_ev = _safe_text(ev.get("title"))
+            pub = _safe_text(ev.get("publisher"))
+            url = _safe_text(ev.get("url"))
             lines.append(f"- [{ev_id}] {title_ev} — {pub} ({url})")
 
     md = "\n".join(lines)

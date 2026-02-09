@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/patient_inbox.schema.json",
+  "title": "Patient Inbox",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "count", "patients"],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "generated_at": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_datetime"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "patients": {
+      "type": "array",
+      "items": {
+        "$ref": "pharmassist://contracts/patient_analysis_status.schema.json"
+      }
+    }
+  }
+}

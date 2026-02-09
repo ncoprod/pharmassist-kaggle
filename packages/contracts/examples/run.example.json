@@ -49,6 +49,49 @@
     ],
     "report_markdown": "# Pharmacist report (synthetic)\n\nThis is an OTC/parapharmacy decision support demo.\n\nImportant: Ne modifiez pas votre traitement sur ordonnance sans avis medical.\n",
     "handout_markdown": "# Patient handout (synthetic)\n\n- Follow the pharmacist instructions.\n- If symptoms worsen, consult a doctor.\n",
+    "prebrief": {
+      "schema_version": "0.0.0",
+      "top_actions": [
+        "Verify symptom trajectory",
+        "Consider SKU-0001 if no blocker"
+      ],
+      "top_risks": [
+        "WARN: monitor fever persistence"
+      ],
+      "top_questions": [
+        "Any breathing difficulty?"
+      ],
+      "what_changed": [
+        "retrieved=1"
+      ],
+      "new_rx_delta": [
+        "SKU-0001 evidence: ev_0001"
+      ]
+    },
+    "plan": {
+      "schema_version": "0.0.0",
+      "planner_version": "feb14-v1",
+      "generated_at": "2026-02-03T19:30:00Z",
+      "mode": "fallback_deterministic",
+      "fallback_used": true,
+      "trace_meta": {
+        "plan_source": "fallback",
+        "invalid_json_reason": "feature flag disabled in example context"
+      },
+      "safety_checks": [
+        "No PHI in plan artifact.",
+        "Closed allowlist for step kinds."
+      ],
+      "steps": [
+        {
+          "step_id": "fallback-1",
+          "kind": "counseling_question",
+          "title": "Clarify symptoms",
+          "detail": "Collect symptom chronology and blockers before OTC advice.",
+          "evidence_refs": []
+        }
+      ]
+    },
     "trace": {
       "schema_version": "0.0.0",
       "trace_id": "8c9b1c2d-3e4f-4a5b-8c9d-1e2f3a4b5c6d",

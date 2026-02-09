@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.0.0",
+  "patient_ref": "pt_000123",
+  "status": "refresh_pending",
+  "changed_since_last_analysis": true,
+  "latest_visit_ref": "visit_000999",
+  "latest_visit_at": "2026-02-09T09:40:00Z",
+  "latest_run_id": "3f0e3a9d-4d3c-4e4a-8d7e-2f6c2a3f9d1b",
+  "latest_run_status": "completed",
+  "latest_run_at": "2026-02-09T09:20:00Z",
+  "last_error": null,
+  "message": "New data detected; refresh is pending.",
+  "updated_at": "2026-02-09T09:41:00Z"
+}

@@ -19,6 +19,8 @@ from .steps.a5_safety import compute_safety_warnings
 from .steps.a6_product_ranker import rank_products
 from .steps.a7_report_composer import compose_report_markdown
 from .steps.a8_handout import compose_handout_markdown
+from .steps.a8_prebrief import compose_prebrief
+from .steps.a9_planner import build_planner_plan, planner_feature_enabled
 from .validators.phi_scanner import scan_for_phi
 from .validators.policy_validate import validate_payload
 
@@ -34,7 +36,9 @@ PIPELINE_STEPS = [
     "A4_evidence_retrieval",
     "A7_report_composer",
     "A8_handout",
-    "A9_trace",
+    "A8_prebrief",
+    "A9_planner",
+    "A10_trace",
 ]
 
 # In-memory per-run queues for SSE. Assumes a single-process server (OK for Kaggle demo).
@@ -628,6 +632,69 @@ async def run_pipeline(run_id: str) -> None:
             artifacts["handout_markdown"] = handout_md
             await asyncio.sleep(0.1)
 
+        elif step == "A8_prebrief":
+            trace_artifact = _build_trace_artifact(run_id)
+            trace_events = (
+                trace_artifact.get("events")
+                if isinstance(trace_artifact.get("events"), list)
+                else []
+            )
+            prebrief = compose_prebrief(
+                recommendation=recommendation if isinstance(recommendation, dict) else None,
+                trace_events=trace_events,
+                language=language,
+                visit_ref=run.get("input", {}).get("visit_ref")
+                if isinstance(run.get("input", {}), dict)
+                else None,
+            )
+            artifacts["prebrief"] = prebrief
+            emit_event(
+                run_id,
+                "tool_result",
+                {
+                    "step": step,
+                    "tool_name": "prebrief_builder",
+                    "result_summary": (
+                        f"actions={len(prebrief.get('top_actions') or [])} "
+                        f"risks={len(prebrief.get('top_risks') or [])} "
+                        f"delta={len(prebrief.get('new_rx_delta') or [])}"
+                    ),
+                },
+            )
+            await asyncio.sleep(0.05)
+
+        elif step == "A9_planner":
+            if planner_feature_enabled():
+                plan = build_planner_plan(
+                    recommendation=recommendation if isinstance(recommendation, dict) else None,
+                    language=language,
+                )
+                artifacts["plan"] = plan
+                emit_event(
+                    run_id,
+                    "tool_result",
+                    {
+                        "step": step,
+                        "tool_name": "planner",
+                        "result_summary": (
+                            f"mode={plan.get('mode')} "
+                            f"fallback={bool(plan.get('fallback_used'))} "
+                            f"steps={len(plan.get('steps') or [])}"
+                        ),
+                    },
+                )
+            else:
+                emit_event(
+                    run_id,
+                    "tool_result",
+                    {
+                        "step": step,
+                        "tool_name": "planner",
+                        "result_summary": "disabled_by_feature_flag",
+                    },
+                )
+            await asyncio.sleep(0.05)
+
         else:
             # Simulate work; keeps the UI feeling alive without heavy computation.
             await asyncio.sleep(0.25)
@@ -660,6 +727,21 @@ async def run_pipeline(run_id: str) -> None:
             "# Patient handout (synthetic)\n\n"
             "- Suivez les conseils du pharmacien.\n"
             "- Si aggravation ou symptomes inhabituels: consultez un medecin.\n"
+        )
+    if "prebrief" not in artifacts:
+        trace_artifact = _build_trace_artifact(run_id)
+        trace_events = (
+            trace_artifact.get("events")
+            if isinstance(trace_artifact.get("events"), list)
+            else []
+        )
+        artifacts["prebrief"] = compose_prebrief(
+            recommendation=recommendation if isinstance(recommendation, dict) else None,
+            trace_events=trace_events,
+            language=language,
+            visit_ref=run.get("input", {}).get("visit_ref")
+            if isinstance(run.get("input", {}), dict)
+            else None,
         )
 
     # Build a redacted trace artifact for audit/debugging (no prompts, no OCR text).

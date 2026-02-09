@@ -93,14 +93,22 @@ assert_status 429 -H "X-Admin-Key: ${ADMIN_KEY}" "${API_BASE}/admin/db-preview/t
 echo "[redteam] check data endpoint auth guard -> 401"
 assert_status 401 "${API_BASE}/patients?query=pt_0000"
 assert_status 200 -H "X-Api-Key: ${API_KEY}" "${API_BASE}/patients?query=pt_0000"
+assert_status 401 "${API_BASE}/patients/inbox"
+assert_status 200 -H "X-Api-Key: ${API_KEY}" "${API_BASE}/patients/inbox"
+assert_status 401 "${API_BASE}/patients/pt_000000/analysis-status"
+assert_status 200 -H "X-Api-Key: ${API_KEY}" "${API_BASE}/patients/pt_000000/analysis-status"
+assert_status 401 -X POST -H "Content-Type: application/json" -d '{"reason":"redteam"}' "${API_BASE}/patients/pt_000000/refresh"
+assert_status 200 -X POST -H "X-Api-Key: ${API_KEY}" -H "Content-Type: application/json" -d '{"reason":"redteam"}' "${API_BASE}/patients/pt_000000/refresh"
 
 TXT_FILE="$(mktemp_file)"
 PDF_SMALL="$(mktemp_file)"
 PDF_BIG="$(mktemp_file)"
-trap 'rm -f "${TXT_FILE}" "${PDF_SMALL}" "${PDF_BIG}"; cleanup' EXIT
+PDF_BAD_HEADER="$(mktemp_file)"
+trap 'rm -f "${TXT_FILE}" "${PDF_SMALL}" "${PDF_BIG}" "${PDF_BAD_HEADER}"; cleanup' EXIT
 
 echo "not a pdf" >"${TXT_FILE}"
 printf '%%PDF-1.4\nfake\n' >"${PDF_SMALL}"
+printf 'notpdf' >"${PDF_BAD_HEADER}"
 python3 - <<PY
 from pathlib import Path
 p = Path("${PDF_BIG}")
@@ -118,5 +126,8 @@ assert_status 413 -H "X-Api-Key: ${API_KEY}" -F "patient_ref=pt_000000" -F "lang
 
 echo "[redteam] check malformed pdf -> 400"
 assert_status 400 -H "X-Api-Key: ${API_KEY}" -F "patient_ref=pt_000000" -F "language=en" -F "file=@${PDF_SMALL};type=application/pdf;filename=rx_small.pdf" "${API_BASE}/documents/prescription"
+
+echo "[redteam] check invalid pdf header with pdf mime -> 400"
+assert_status 400 -H "X-Api-Key: ${API_KEY}" -F "patient_ref=pt_000000" -F "language=en" -F "file=@${PDF_BAD_HEADER};type=application/pdf;filename=rx_bad.pdf" "${API_BASE}/documents/prescription"
 
 echo "[redteam] all runtime checks passed"
