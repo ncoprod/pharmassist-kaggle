@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.0.0",
+  "planner_version": "feb14-v1",
+  "generated_at": "2026-02-09T10:00:00Z",
+  "mode": "agentic",
+  "fallback_used": false,
+  "trace_meta": {
+    "plan_source": "llm_json"
+  },
+  "safety_checks": [
+    "No PHI in plan artifact.",
+    "Closed allowlist for step kinds."
+  ],
+  "steps": [
+    {
+      "step_id": "agentic-1",
+      "kind": "safety_check",
+      "title": "Verify red flags",
+      "detail": "Confirm no severe dyspnea, chest pain or persistent fever.",
+      "evidence_refs": ["ev_0001"]
+    },
+    {
+      "step_id": "agentic-2",
+      "kind": "otc_suggestion",
+      "title": "OTC SKU-0001",
+      "detail": "If no blocker, consider SKU-0001 with counseling and warning signs.",
+      "evidence_refs": ["ev_0001", "ev_0002"]
+    }
+  ]
+}

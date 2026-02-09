@@ -26,6 +26,7 @@ def db_path() -> Path:
         return Path(env)
     return repo_root() / ".data" / "pharmassist.db"
 
+
 def _ensure_parent_dir(path: Path) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -196,6 +197,26 @@ def init_db() -> None:
               doc_ref TEXT PRIMARY KEY,
               metadata_json TEXT NOT NULL
             );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS patient_analysis_state (
+              patient_ref TEXT PRIMARY KEY,
+              status TEXT NOT NULL,
+              updated_at TEXT NOT NULL,
+              last_run_id TEXT,
+              last_error TEXT,
+              changed_since_last_analysis INTEGER NOT NULL DEFAULT 0,
+              refresh_reason TEXT,
+              FOREIGN KEY(patient_ref) REFERENCES patients(patient_ref)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_patient_analysis_state_status
+            ON patient_analysis_state(status, updated_at DESC);
             """
         )
         conn.execute(
@@ -642,6 +663,83 @@ def get_document(doc_ref: str) -> dict[str, Any] | None:
     }
 
 
+def set_patient_analysis_state(
+    *,
+    patient_ref: str,
+    status: str,
+    last_run_id: str | None = None,
+    last_error: str | None = None,
+    changed_since_last_analysis: bool | None = None,
+    refresh_reason: str | None = None,
+) -> None:
+    updates: list[str] = ["status = excluded.status", "updated_at = excluded.updated_at"]
+    if last_run_id is not None:
+        updates.append("last_run_id = excluded.last_run_id")
+    if last_error is not None:
+        updates.append("last_error = excluded.last_error")
+    if changed_since_last_analysis is not None:
+        updates.append("changed_since_last_analysis = excluded.changed_since_last_analysis")
+    if refresh_reason is not None:
+        updates.append("refresh_reason = excluded.refresh_reason")
+
+    with _connect() as conn:
+        conn.execute(
+            f"""
+            INSERT INTO patient_analysis_state(
+              patient_ref,
+              status,
+              updated_at,
+              last_run_id,
+              last_error,
+              changed_since_last_analysis,
+              refresh_reason
+            )
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(patient_ref) DO UPDATE SET
+              {", ".join(updates)}
+            """,
+            (
+                patient_ref,
+                status,
+                now_iso(),
+                last_run_id,
+                last_error,
+                1 if changed_since_last_analysis else 0,
+                refresh_reason,
+            ),
+        )
+
+
+def get_patient_analysis_state(patient_ref: str) -> dict[str, Any] | None:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+              patient_ref,
+              status,
+              updated_at,
+              last_run_id,
+              last_error,
+              changed_since_last_analysis,
+              refresh_reason
+            FROM patient_analysis_state
+            WHERE patient_ref = ?
+            """,
+            (patient_ref,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "patient_ref": row["patient_ref"],
+        "status": row["status"],
+        "updated_at": row["updated_at"],
+        "last_run_id": row["last_run_id"],
+        "last_error": row["last_error"],
+        "changed_since_last_analysis": bool(int(row["changed_since_last_analysis"] or 0)),
+        "refresh_reason": row["refresh_reason"],
+    }
+
+
 def list_inventory(*, limit: int | None = None) -> list[dict[str, Any]]:
     sql = "SELECT product_json FROM inventory ORDER BY sku ASC"
     params: tuple[Any, ...] = ()
@@ -678,6 +776,93 @@ def count_documents() -> int:
         return int(row["c"]) if row else 0
 
 
+def list_patient_refs_with_visits(*, limit: int | None = 200) -> list[str]:
+    with _connect() as conn:
+        if limit is None:
+            rows = conn.execute(
+                """
+                SELECT patient_ref
+                FROM visits
+                GROUP BY patient_ref
+                ORDER BY MAX(occurred_at) DESC, patient_ref ASC
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT patient_ref
+                FROM visits
+                GROUP BY patient_ref
+                ORDER BY MAX(occurred_at) DESC, patient_ref ASC
+                LIMIT ?
+                """,
+                (int(limit),),
+            ).fetchall()
+    return [str(r["patient_ref"]) for r in rows if isinstance(r["patient_ref"], str)]
+
+
+def get_latest_patient_visit(*, patient_ref: str) -> dict[str, Any] | None:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT visit_ref, occurred_at, primary_domain
+            FROM visits
+            WHERE patient_ref = ?
+            ORDER BY occurred_at DESC, visit_ref DESC
+            LIMIT 1
+            """,
+            (patient_ref,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "visit_ref": row["visit_ref"],
+        "occurred_at": row["occurred_at"],
+        "primary_domain": row["primary_domain"],
+    }
+
+
+def get_latest_run_for_patient(
+    *,
+    patient_ref: str,
+    trigger: str | None = None,
+    status: str | None = None,
+) -> dict[str, Any] | None:
+    conditions = ["json_extract(input_json, '$.patient_ref') = ?"]
+    params: list[Any] = [patient_ref]
+    if isinstance(trigger, str) and trigger.strip():
+        conditions.append("json_extract(input_json, '$.trigger') = ?")
+        params.append(trigger.strip())
+    if isinstance(status, str) and status.strip():
+        conditions.append("status = ?")
+        params.append(status.strip())
+
+    where = " AND ".join(conditions)
+    with _connect() as conn:
+        row = conn.execute(
+            f"""
+            SELECT run_id, created_at, status, input_json
+            FROM runs
+            WHERE {where}
+            ORDER BY created_at DESC, run_id DESC
+            LIMIT 1
+            """,
+            params,
+        ).fetchone()
+    if not row:
+        return None
+    input_payload = _json_load_object(row["input_json"])
+    visit_ref = input_payload.get("visit_ref")
+    language = input_payload.get("language")
+    return {
+        "run_id": row["run_id"],
+        "created_at": row["created_at"],
+        "status": row["status"],
+        "visit_ref": visit_ref if isinstance(visit_ref, str) else None,
+        "language": language if isinstance(language, str) else None,
+    }
+
+
 _DB_PREVIEW_TABLES = (
     "runs",
     "run_events",
@@ -686,6 +871,7 @@ _DB_PREVIEW_TABLES = (
     "events",
     "inventory",
     "documents",
+    "patient_analysis_state",
 )
 _DB_PREVIEW_LIMIT_MAX = 100
 
@@ -731,6 +917,8 @@ def preview_db_table(*, table: str, query: str = "", limit: int = 50) -> dict[st
             columns, rows, count = _preview_events(conn, query_norm, limit_norm)
         elif table_norm == "inventory":
             columns, rows, count = _preview_inventory(conn, query_norm, limit_norm)
+        elif table_norm == "patient_analysis_state":
+            columns, rows, count = _preview_patient_analysis_state(conn, query_norm, limit_norm)
         else:
             columns, rows, count = _preview_documents(conn, query_norm, limit_norm)
 
@@ -1112,6 +1300,63 @@ def _preview_documents(
 
     return (
         ["doc_ref", "metadata_keys"],
+        out,
+        int(count["c"]) if count else 0,
+    )
+
+
+def _preview_patient_analysis_state(
+    conn: sqlite3.Connection, query: str, limit: int
+) -> tuple[list[str], list[dict[str, Any]], int]:
+    where = ""
+    params: tuple[Any, ...] = ()
+    if query:
+        where = "WHERE patient_ref LIKE ?"
+        params = (f"{query}%",)
+
+    count = conn.execute(
+        f"SELECT COUNT(1) AS c FROM patient_analysis_state {where}",
+        params,
+    ).fetchone()
+    rows = conn.execute(
+        f"""
+        SELECT
+          patient_ref,
+          status,
+          updated_at,
+          last_run_id,
+          changed_since_last_analysis,
+          refresh_reason
+        FROM patient_analysis_state
+        {where}
+        ORDER BY updated_at DESC, patient_ref ASC
+        LIMIT ?
+        """,
+        (*params, int(limit)),
+    ).fetchall()
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "patient_ref": row["patient_ref"],
+                "status": row["status"],
+                "updated_at": row["updated_at"],
+                "last_run_id": row["last_run_id"] or "",
+                "changed_since_last_analysis": bool(int(row["changed_since_last_analysis"] or 0)),
+                "refresh_reason": row["refresh_reason"] or "",
+            }
+        )
+
+    return (
+        [
+            "patient_ref",
+            "status",
+            "updated_at",
+            "last_run_id",
+            "changed_since_last_analysis",
+            "refresh_reason",
+        ],
         out,
         int(count["c"]) if count else 0,
     )

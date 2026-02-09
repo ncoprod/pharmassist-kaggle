@@ -84,4 +84,60 @@ def validate_payload(payload: Any, *, schema_name: str) -> list[Violation]:
                             )
                         )
 
+            prebrief = artifacts.get("prebrief")
+            if isinstance(prebrief, dict):
+                for key in (
+                    "top_actions",
+                    "top_risks",
+                    "top_questions",
+                    "what_changed",
+                    "new_rx_delta",
+                ):
+                    values = prebrief.get(key)
+                    if not isinstance(values, list):
+                        continue
+                    for idx, value in enumerate(values):
+                        if isinstance(value, str):
+                            violations.extend(
+                                lint_rx_advice(
+                                    value,
+                                    path=f"$.artifacts.prebrief.{key}[{idx}]",
+                                )
+                            )
+
+            plan = artifacts.get("plan")
+            if isinstance(plan, dict):
+                safety_checks = plan.get("safety_checks")
+                if isinstance(safety_checks, list):
+                    for idx, value in enumerate(safety_checks):
+                        if isinstance(value, str):
+                            violations.extend(
+                                lint_rx_advice(
+                                    value,
+                                    path=f"$.artifacts.plan.safety_checks[{idx}]",
+                                )
+                            )
+
+                steps = plan.get("steps")
+                if isinstance(steps, list):
+                    for idx, step in enumerate(steps):
+                        if not isinstance(step, dict):
+                            continue
+                        title = step.get("title")
+                        detail = step.get("detail")
+                        if isinstance(title, str):
+                            violations.extend(
+                                lint_rx_advice(
+                                    title,
+                                    path=f"$.artifacts.plan.steps[{idx}].title",
+                                )
+                            )
+                        if isinstance(detail, str):
+                            violations.extend(
+                                lint_rx_advice(
+                                    detail,
+                                    path=f"$.artifacts.plan.steps[{idx}].detail",
+                                )
+                            )
+
     return violations

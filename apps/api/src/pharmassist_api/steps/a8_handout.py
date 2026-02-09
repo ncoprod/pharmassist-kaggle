@@ -7,6 +7,10 @@ from pharmassist_api.validators.rx_advice_lint import lint_rx_advice
 Language = Literal["fr", "en"]
 
 
+def _safe_text(value: Any) -> str:
+    return str(value or "").replace("<", "‹").replace(">", "›").strip()
+
+
 def compose_handout_markdown(
     *,
     recommendation: dict[str, Any] | None,
@@ -36,8 +40,8 @@ def compose_handout_markdown(
     if isinstance(esc, dict) and esc.get("recommended") is True:
         lines.append("")
         lines.append("## When to seek care" if language == "en" else "## Quand consulter")
-        lines.append(f"- {esc.get('reason')}")
-        lines.append(f"- Service: {esc.get('suggested_service')}")
+        lines.append(f"- {_safe_text(esc.get('reason'))}")
+        lines.append(f"- Service: {_safe_text(esc.get('suggested_service'))}")
 
     ranked = recommendation.get("ranked_products") or []
     if ranked:
@@ -45,7 +49,7 @@ def compose_handout_markdown(
         lines.append("## Suggested products" if language == "en" else "## Produits proposes")
         for p in ranked[:3]:
             if isinstance(p, dict):
-                lines.append(f"- {p.get('product_sku')}: {p.get('why')}")
+                lines.append(f"- {_safe_text(p.get('product_sku'))}: {_safe_text(p.get('why'))}")
 
     lines.append("")
     lines.append("## What to do now" if language == "en" else "## A faire")

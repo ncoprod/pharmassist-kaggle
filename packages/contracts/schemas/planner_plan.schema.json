@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pharmassist://contracts/planner_plan.schema.json",
+  "title": "Planner Plan (agentic, feature-flagged)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "planner_version",
+    "generated_at",
+    "mode",
+    "fallback_used",
+    "trace_meta",
+    "safety_checks",
+    "steps"
+  ],
+  "properties": {
+    "schema_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/schema_version"
+    },
+    "planner_version": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+    },
+    "generated_at": {
+      "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/iso_datetime"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["agentic", "fallback_deterministic"]
+    },
+    "fallback_used": {
+      "type": "boolean"
+    },
+    "trace_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan_source"],
+      "properties": {
+        "plan_source": {
+          "type": "string",
+          "enum": ["llm_json", "fallback"]
+        },
+        "invalid_json_reason": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "safety_checks": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step_id", "kind", "title", "detail", "evidence_refs"],
+        "properties": {
+          "step_id": {
+            "$ref": "pharmassist://contracts/_meta.schema.json#/$defs/non_empty_string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "counseling_question",
+              "safety_check",
+              "otc_suggestion",
+              "escalation",
+              "evidence_review"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "evidence_refs": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

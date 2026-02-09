@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { MarkdownArticle } from './components/MarkdownArticle'
 
 type FollowUpAnswer = { question_id: string; answer: string }
 
@@ -73,6 +74,31 @@ type Recommendation = {
   confidence?: number
 }
 
+type Prebrief = {
+  top_actions?: string[]
+  top_risks?: string[]
+  top_questions?: string[]
+  what_changed?: string[]
+  new_rx_delta?: string[]
+}
+
+type PlannerStep = {
+  step_id: string
+  kind: 'counseling_question' | 'safety_check' | 'otc_suggestion' | 'escalation' | 'evidence_review'
+  title: string
+  detail: string
+  evidence_refs: string[]
+}
+
+type PlannerPlan = {
+  planner_version: string
+  generated_at: string
+  mode: 'agentic' | 'fallback_deterministic'
+  fallback_used: boolean
+  safety_checks: string[]
+  steps: PlannerStep[]
+}
+
 const EMPTY_FOLLOW_UP_ANSWERS: FollowUpAnswer[] = []
 const EMPTY_FOLLOW_UP_QUESTIONS: FollowUpQuestion[] = []
 
@@ -95,6 +121,8 @@ type Run = {
     recommendation?: Recommendation
     evidence_items?: EvidenceItem[]
     trace?: Trace
+    prebrief?: Prebrief
+    plan?: PlannerPlan
   }
   policy_violations?: unknown[]
 }
@@ -126,6 +154,28 @@ type VisitSummary = {
   primary_domain?: string | null
   intents?: string[]
   presenting_problem?: string
+}
+
+type PatientAnalysisStatus = {
+  schema_version: string
+  patient_ref: string
+  status: 'up_to_date' | 'refresh_pending' | 'running' | 'failed'
+  changed_since_last_analysis: boolean
+  latest_visit_ref?: string | null
+  latest_visit_at?: string | null
+  latest_run_id?: string | null
+  latest_run_status?: string | null
+  latest_run_at?: string | null
+  last_error?: string | null
+  message: string
+  updated_at: string
+}
+
+type PatientInboxPayload = {
+  schema_version: string
+  generated_at: string
+  count: number
+  patients: PatientAnalysisStatus[]
 }
 
 type DocumentUploadReceipt = {
@@ -164,6 +214,170 @@ function formatDbCell(value: DbCell): string {
   return String(value)
 }
 
+type AtAGlance = {
+  actions: string[]
+  risks: string[]
+  questions: string[]
+  delta: string[]
+  rxDelta: string[]
+}
+
+function topNUnique(items: string[], n: number): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of items) {
+    const normalized = item.trim()
+    if (!normalized) continue
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(normalized)
+    if (out.length >= n) break
+  }
+  return out
+}
+
+function buildAtAGlance(run: Run | null, language: 'fr' | 'en'): AtAGlance {
+  const prebrief = run?.artifacts?.prebrief
+  if (prebrief) {
+    return {
+      actions: topNUnique(prebrief.top_actions ?? [], 3),
+      risks: topNUnique(prebrief.top_risks ?? [], 3),
+      questions: topNUnique(prebrief.top_questions ?? [], 3),
+      delta: topNUnique(prebrief.what_changed ?? [], 3),
+      rxDelta: topNUnique(prebrief.new_rx_delta ?? [], 3),
+    }
+  }
+
+  const recommendation = run?.artifacts?.recommendation
+  const actionsRaw: string[] = []
+  const risksRaw: string[] = []
+  const questionsRaw: string[] = []
+  const deltaRaw: string[] = []
+  const rxDeltaRaw: string[] = []
+
+  if (recommendation?.escalation?.recommended) {
+    actionsRaw.push(
+      language === 'fr'
+        ? `Escalade recommandee: ${recommendation.escalation.suggested_service}`
+        : `Escalation recommended: ${recommendation.escalation.suggested_service}`,
+    )
+  }
+
+  for (const p of recommendation?.ranked_products ?? []) {
+    actionsRaw.push(
+      language === 'fr'
+        ? `Produit ${p.product_sku}: ${p.why}`
+        : `Product ${p.product_sku}: ${p.why}`,
+    )
+  }
+
+  for (const w of recommendation?.safety_warnings ?? []) {
+    risksRaw.push(`${w.severity}: ${w.message}${w.related_product_sku ? ` (${w.related_product_sku})` : ''}`)
+    rxDeltaRaw.push(`${w.severity}: ${w.message}`)
+  }
+
+  for (const q of recommendation?.follow_up_questions ?? []) {
+    questionsRaw.push(q.question)
+  }
+
+  if (run?.input?.visit_ref) {
+    deltaRaw.push(
+      language === 'fr'
+        ? `Analyse basee sur la visite ${run.input.visit_ref}.`
+        : `Analysis based on visit ${run.input.visit_ref}.`,
+    )
+  }
+
+  for (const event of run?.artifacts?.trace?.events ?? []) {
+    if (event.type === 'tool_result' && typeof event.result_summary === 'string' && event.result_summary.trim()) {
+      deltaRaw.push(event.result_summary.trim())
+    } else if (typeof event.message === 'string' && event.message.trim()) {
+      deltaRaw.push(event.message.trim())
+    }
+  }
+
+  const actions = topNUnique(actionsRaw, 3)
+  const risks = topNUnique(risksRaw, 3)
+  const questions = topNUnique(questionsRaw, 3)
+  const delta = topNUnique(deltaRaw, 3)
+  const rxDelta = topNUnique(rxDeltaRaw, 3)
+
+  return {
+    actions:
+      actions.length > 0
+        ? actions
+        : [
+            language === 'fr'
+              ? 'Aucune action critique detectee. Consultez les recommandations detaillees.'
+              : 'No critical action detected. See detailed recommendations.',
+          ],
+    risks:
+      risks.length > 0
+        ? risks
+        : [language === 'fr' ? 'Aucun risque majeur detecte.' : 'No major risk detected.'],
+    questions:
+      questions.length > 0
+        ? questions
+        : [
+            language === 'fr'
+              ? 'Confirmer les symptomes et leur evolution avec le patient.'
+              : 'Confirm symptom evolution with the patient.',
+          ],
+    delta:
+      delta.length > 0
+        ? delta
+        : [language === 'fr' ? 'Aucun changement notable depuis la derniere analyse.' : 'No notable change since last analysis.'],
+    rxDelta:
+      rxDelta.length > 0
+        ? rxDelta
+        : [language === 'fr' ? 'Aucun delta Rx critique.' : 'No critical Rx delta.'],
+  }
+}
+
+type DemoPreset = {
+  id: string
+  label: string
+  note: string
+  case_ref?: string
+  patient_ref?: string
+  visit_ref?: string
+}
+
+const DEMO_PRESETS: DemoPreset[] = [
+  {
+    id: 'baseline',
+    label: 'Baseline OTC',
+    note: 'Flow complet sans escalade, avec evidence et handout imprimable.',
+    case_ref: 'case_000042',
+  },
+  {
+    id: 'redflag',
+    label: 'Red Flag',
+    note: 'Escalade recommandee et blocage des suggestions produit.',
+    case_ref: 'case_redflag_000101',
+  },
+  {
+    id: 'lowinfo',
+    label: 'Low Info',
+    note: 'Questions de suivi puis re-run guide.',
+    case_ref: 'case_lowinfo_000102',
+  },
+  {
+    id: 'uploaded_rx',
+    label: 'Upload RX',
+    note: 'Upload ordonnance -> auto refresh patient en arriere-plan.',
+    patient_ref: 'pt_000000',
+  },
+]
+
+const DEMO_CHECKLIST = [
+  'At-a-glance en moins de 30 secondes',
+  'Guardrails PHI (upload + follow-up)',
+  'Evidence refs sur recommandations OTC',
+  'Auto-refresh patient sans clic manuel',
+  'Trace redactee sans prompts/secrets',
+]
+
 function App() {
   const apiBase = useMemo(() => {
     return import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
@@ -174,6 +388,8 @@ function App() {
 
   const [language, setLanguage] = useState<'fr' | 'en'>('fr')
   const [activeTab, setActiveTab] = useState<'run' | 'patients' | 'db'>('run')
+  const [demoMode, setDemoMode] = useState(false)
+  const [demoPresetId, setDemoPresetId] = useState<string>(DEMO_PRESETS[0].id)
   const [caseRef, setCaseRef] = useState('case_000042')
   const [run, setRun] = useState<Run | null>(null)
   const [events, setEvents] = useState<Array<{ id: number; data: RunEvent }>>([])
@@ -185,8 +401,10 @@ function App() {
   const [patientResults, setPatientResults] = useState<PatientSearchItem[]>([])
   const [selectedPatient, setSelectedPatient] = useState<PatientDetail | null>(null)
   const [patientVisits, setPatientVisits] = useState<VisitSummary[]>([])
+  const [patientAnalysisStatus, setPatientAnalysisStatus] = useState<PatientAnalysisStatus | null>(null)
+  const [patientInbox, setPatientInbox] = useState<PatientAnalysisStatus[]>([])
+  const [isRefreshingPatient, setIsRefreshingPatient] = useState(false)
   const [isPatientsLoading, setIsPatientsLoading] = useState(false)
-  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null)
   const [isUploadingPrescription, setIsUploadingPrescription] = useState(false)
   const [uploadReceipt, setUploadReceipt] = useState<DocumentUploadReceipt | null>(null)
 
@@ -199,6 +417,9 @@ function App() {
 
   const esRef = useRef<EventSource | null>(null)
   const seenIdsRef = useRef<Set<number>>(new Set())
+  const prescriptionInputRef = useRef<HTMLInputElement | null>(null)
+  const selectedPatientRef = useRef<string | null>(null)
+  const openPatientRequestRef = useRef(0)
 
   const followUpQuestions = useMemo(() => {
     return run?.artifacts?.recommendation?.follow_up_questions ?? EMPTY_FOLLOW_UP_QUESTIONS
@@ -210,6 +431,18 @@ function App() {
   const escalation = run?.artifacts?.recommendation?.escalation
   const evidenceItems = run?.artifacts?.evidence_items ?? []
   const trace = run?.artifacts?.trace
+  const plannerPlan = run?.artifacts?.plan
+  const activeDemoPreset = useMemo(
+    () => DEMO_PRESETS.find((p) => p.id === demoPresetId) ?? DEMO_PRESETS[0],
+    [demoPresetId],
+  )
+  const atAGlance = useMemo(() => buildAtAGlance(run, runLanguage), [run, runLanguage])
+  const visibleAnalysisStatus = useMemo(() => {
+    if (!selectedPatient) return null
+    if (!patientAnalysisStatus) return null
+    if (patientAnalysisStatus.patient_ref !== selectedPatient.patient_ref) return null
+    return patientAnalysisStatus
+  }, [patientAnalysisStatus, selectedPatient])
 
   function buildApiHeaders(opts?: { admin?: boolean; json?: boolean }): HeadersInit {
     const headers: HeadersInit = {}
@@ -234,8 +467,18 @@ function App() {
     setFollowUpAnswers(next)
   }, [run?.input?.follow_up_answers, run?.run_id])
 
+  useEffect(() => {
+    selectedPatientRef.current = selectedPatient?.patient_ref ?? null
+  }, [selectedPatient?.patient_ref])
+
   function setFollowUpAnswer(questionId: string, value: string) {
     setFollowUpAnswers((prev) => ({ ...prev, [questionId]: value }))
+  }
+
+  function clearPrescriptionSelection() {
+    if (prescriptionInputRef.current) {
+      prescriptionInputRef.current.value = ''
+    }
   }
 
   function renderFollowUpInput(q: FollowUpQuestion) {
@@ -458,6 +701,26 @@ function App() {
     }
   }
 
+  async function runDemoPreset(preset: DemoPreset) {
+    setError(null)
+    if (preset.visit_ref && preset.patient_ref) {
+      setActiveTab('run')
+      await startRun({ patient_ref: preset.patient_ref, visit_ref: preset.visit_ref })
+      return
+    }
+
+    if (preset.patient_ref && !preset.case_ref) {
+      setActiveTab('patients')
+      setPatientQuery(preset.patient_ref)
+      await openPatient(preset.patient_ref)
+      return
+    }
+
+    setActiveTab('run')
+    if (preset.case_ref) setCaseRef(preset.case_ref)
+    await startRun({ case_ref: preset.case_ref ?? caseRef })
+  }
+
   useEffect(() => {
     return () => {
       esRef.current?.close()
@@ -504,6 +767,15 @@ function App() {
   }
 
   async function openPatient(patientRef: string, opts?: { preserveUpload?: boolean }) {
+    const requestId = openPatientRequestRef.current + 1
+    openPatientRequestRef.current = requestId
+    if (selectedPatientRef.current !== patientRef) {
+      setPatientAnalysisStatus(null)
+    }
+    if (!opts?.preserveUpload) {
+      setUploadReceipt(null)
+      clearPrescriptionSelection()
+    }
     setError(null)
     setIsPatientsLoading(true)
     try {
@@ -515,6 +787,7 @@ function App() {
           headers: buildApiHeaders(),
         }),
       ])
+      if (requestId !== openPatientRequestRef.current) return
       if (!pResp.ok) {
         setError(`Failed to load patient (${pResp.status}).`)
         return
@@ -525,16 +798,85 @@ function App() {
       }
       const p = (await pResp.json()) as PatientDetail
       const v = (await vResp.json()) as { visits?: VisitSummary[] }
+      if (requestId !== openPatientRequestRef.current) return
+      selectedPatientRef.current = p.patient_ref
       setSelectedPatient(p)
       setPatientVisits(Array.isArray(v.visits) ? v.visits : [])
-      if (!opts?.preserveUpload) {
-        setUploadReceipt(null)
-        setPrescriptionFile(null)
+      await Promise.all([
+        loadPatientAnalysisStatus(patientRef),
+        loadPatientInbox(),
+      ])
+    } catch {
+      if (requestId === openPatientRequestRef.current) {
+        setError(`Cannot reach API at ${apiBase}.`)
       }
+    } finally {
+      if (requestId === openPatientRequestRef.current) {
+        setIsPatientsLoading(false)
+      }
+    }
+  }
+
+  async function loadPatientAnalysisStatus(patientRef: string) {
+    try {
+      const resp = await fetch(
+        `${apiBase}/patients/${encodeURIComponent(patientRef)}/analysis-status`,
+        { headers: buildApiHeaders() },
+      )
+      if (!resp.ok) return
+      const payload = (await resp.json()) as PatientAnalysisStatus
+      if (payload.patient_ref !== patientRef) return
+      if (selectedPatientRef.current !== patientRef) return
+      setPatientAnalysisStatus(payload)
+    } catch {
+      // ignore polling failures
+    }
+  }
+
+  async function loadPatientInbox() {
+    try {
+      const resp = await fetch(`${apiBase}/patients/inbox?limit=50`, {
+        headers: buildApiHeaders(),
+      })
+      if (!resp.ok) return
+      const payload = (await resp.json()) as PatientInboxPayload
+      setPatientInbox(Array.isArray(payload.patients) ? payload.patients : [])
+    } catch {
+      // ignore polling failures
+    }
+  }
+
+  async function refreshSelectedPatient() {
+    if (!selectedPatient) return
+    setIsRefreshingPatient(true)
+    setError(null)
+    try {
+      const resp = await fetch(
+        `${apiBase}/patients/${encodeURIComponent(selectedPatient.patient_ref)}/refresh`,
+        {
+          method: 'POST',
+          headers: buildApiHeaders({ json: true }),
+          body: JSON.stringify({ reason: 'manual_refresh_ui' }),
+        },
+      )
+      if (!resp.ok) {
+        setError(`Failed to refresh patient analysis (${resp.status}).`)
+        return
+      }
+      const payload = (await resp.json()) as { analysis_status?: PatientAnalysisStatus }
+      const nextStatus = payload.analysis_status
+      if (
+        nextStatus &&
+        nextStatus.patient_ref === selectedPatient.patient_ref &&
+        selectedPatientRef.current === selectedPatient.patient_ref
+      ) {
+        setPatientAnalysisStatus(nextStatus)
+      }
+      await loadPatientInbox()
     } catch {
       setError(`Cannot reach API at ${apiBase}.`)
     } finally {
-      setIsPatientsLoading(false)
+      setIsRefreshingPatient(false)
     }
   }
 
@@ -545,7 +887,9 @@ function App() {
 
   async function uploadPrescriptionForSelectedPatient() {
     if (!selectedPatient) return
-    if (!prescriptionFile) {
+    const patientRefAtStart = selectedPatient.patient_ref
+    const selectedFile = prescriptionInputRef.current?.files?.[0] ?? null
+    if (!selectedFile) {
       setError('Select a PDF file first.')
       return
     }
@@ -553,9 +897,9 @@ function App() {
     setIsUploadingPrescription(true)
     try {
       const form = new FormData()
-      form.append('patient_ref', selectedPatient.patient_ref)
+      form.append('patient_ref', patientRefAtStart)
       form.append('language', language)
-      form.append('file', prescriptionFile)
+      form.append('file', selectedFile)
 
       const resp = await fetch(`${apiBase}/documents/prescription`, {
         method: 'POST',
@@ -578,8 +922,13 @@ function App() {
         return
       }
       const receipt = (await resp.json()) as DocumentUploadReceipt
+      if (selectedPatientRef.current !== patientRefAtStart) {
+        await loadPatientInbox()
+        return
+      }
       setUploadReceipt(receipt)
-      await openPatient(selectedPatient.patient_ref, { preserveUpload: true })
+      clearPrescriptionSelection()
+      await openPatient(patientRefAtStart, { preserveUpload: true })
     } catch {
       setError(`Cannot reach API at ${apiBase}.`)
     } finally {
@@ -641,6 +990,28 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
+  useEffect(() => {
+    if (activeTab !== 'patients') return
+
+    void loadPatientInbox()
+    if (selectedPatient?.patient_ref) {
+      void loadPatientAnalysisStatus(selectedPatient.patient_ref)
+    }
+
+    const interval = window.setInterval(() => {
+      void loadPatientInbox()
+      if (selectedPatient?.patient_ref) {
+        void loadPatientAnalysisStatus(selectedPatient.patient_ref)
+      }
+    }, 3000)
+
+    return () => {
+      window.clearInterval(interval)
+    }
+    // Intentional polling while patient tab is active.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedPatient?.patient_ref])
+
   return (
     <>
       <div className="app">
@@ -682,15 +1053,52 @@ function App() {
                 <option value="en">EN</option>
               </select>
             </label>
+            <label>
+              Demo
+              <input
+                type="checkbox"
+                checked={demoMode}
+                onChange={(e) => setDemoMode(e.target.checked)}
+                data-testid="demo-mode-toggle"
+              />
+            </label>
             {activeTab === 'run' ? (
               <>
-                <label>
-                  Case
-                  <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
-                </label>
-                <button onClick={() => void startRun()} disabled={isStarting} data-testid="start-run">
-                  {isStarting ? 'Starting...' : 'Start run'}
-                </button>
+                {demoMode ? (
+                  <>
+                    <label>
+                      Preset
+                      <select
+                        value={demoPresetId}
+                        onChange={(e) => setDemoPresetId(e.target.value)}
+                        data-testid="demo-preset-select"
+                      >
+                        {DEMO_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      onClick={() => void runDemoPreset(activeDemoPreset)}
+                      disabled={isStarting}
+                      data-testid="start-run"
+                    >
+                      {isStarting ? 'Starting...' : `Run ${activeDemoPreset.label}`}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      Case
+                      <input value={caseRef} onChange={(e) => setCaseRef(e.target.value)} />
+                    </label>
+                    <button onClick={() => void startRun()} disabled={isStarting} data-testid="start-run">
+                      {isStarting ? 'Starting...' : 'Start run'}
+                    </button>
+                  </>
+                )}
               </>
             ) : null}
           </div>
@@ -725,6 +1133,26 @@ function App() {
                 </button>
               </div>
               <div className="muted">Search by `patient_ref` prefix (synthetic-only).</div>
+              <div className="subTitle">Inbox: new changes since last analysis</div>
+              <div className="patientsList" data-testid="patient-inbox">
+                {patientInbox.length === 0 ? (
+                  <div className="muted small">No pending changes.</div>
+                ) : (
+                  patientInbox.slice(0, 6).map((item) => (
+                    <div key={`inbox-${item.patient_ref}`} className="qCard">
+                      <div className="qHeader">
+                        <div className="qText mono">{item.patient_ref}</div>
+                        <span className={`sev ${item.status === 'failed' ? 'sevBlocker' : 'sevWarn'}`}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <div className="muted small">
+                        {item.latest_visit_ref ?? '—'} · {item.latest_visit_at ?? '—'}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
 
               <div className="patientsList">
                 {patientResults.length === 0 ? (
@@ -770,16 +1198,37 @@ function App() {
                       <span className="k">sex</span>
                       <span className="v">{selectedPatient.llm_context?.demographics?.sex ?? '—'}</span>
                     </div>
+                    <div>
+                      <span className="k">analysis</span>
+                      <span
+                        className={`v statusBadge status-${visibleAnalysisStatus?.status ?? 'loading'}`}
+                        data-testid="analysis-status"
+                      >
+                        {visibleAnalysisStatus?.status ?? 'loading'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="row">
+                    <div className="muted small" data-testid="analysis-status-message">
+                      {visibleAnalysisStatus?.message ?? 'Loading analysis status…'}
+                    </div>
+                    <button
+                      className="printBtn"
+                      onClick={() => void refreshSelectedPatient()}
+                      disabled={isRefreshingPatient}
+                      data-testid="patient-refresh-btn"
+                    >
+                      {isRefreshingPatient ? 'Refreshing…' : 'Refresh now'}
+                    </button>
                   </div>
 
                   <div className="subTitle">Scan ordonnance (PDF text-layer)</div>
                   <div className="row">
                     <input
+                      key={selectedPatient.patient_ref}
+                      ref={prescriptionInputRef}
                       type="file"
                       accept="application/pdf,.pdf"
-                      onChange={(e) => {
-                        setPrescriptionFile(e.target.files?.[0] ?? null)
-                      }}
                       data-testid="patient-prescription-file"
                     />
                     <button
@@ -929,6 +1378,83 @@ function App() {
           </main>
         ) : (
           <main className="grid">
+            <section className="panel heroPanel" data-testid="at-a-glance-panel">
+              <div className="panelTitleRow">
+                <div className="panelTitle">{runLanguage === 'fr' ? "Pre-brief 'At a glance'" : "Pre-brief 'At a glance'"}</div>
+                <div className="muted small">{runLanguage === 'fr' ? 'Lecture rapide <30s' : 'Quick read <30s'}</div>
+              </div>
+              <div className="atGrid">
+                <div className="glanceCard">
+                  <div className="glanceLabel">{runLanguage === 'fr' ? 'Top 3 actions' : 'Top 3 actions'}</div>
+                  <ul className="glanceList">
+                    {atAGlance.actions.map((item, idx) => (
+                      <li key={`action-${idx}`} className="glanceBullet">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="glanceCard">
+                  <div className="glanceLabel">{runLanguage === 'fr' ? 'Top 3 risques / alertes' : 'Top 3 risks / warnings'}</div>
+                  <ul className="glanceList">
+                    {atAGlance.risks.map((item, idx) => (
+                      <li key={`risk-${idx}`} className="glanceBullet">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="glanceCard">
+                  <div className="glanceLabel">{runLanguage === 'fr' ? 'Top 3 questions a poser' : 'Top 3 questions to ask'}</div>
+                  <ul className="glanceList">
+                    {atAGlance.questions.map((item, idx) => (
+                      <li key={`question-${idx}`} className="glanceBullet">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="glanceCard">
+                  <div className="glanceLabel">{runLanguage === 'fr' ? "Ce qui a change depuis l'analyse precedente" : 'What changed since last analysis'}</div>
+                  <ul className="glanceList">
+                    {atAGlance.delta.map((item, idx) => (
+                      <li key={`delta-${idx}`} className="glanceBullet">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="glanceCard">
+                  <div className="glanceLabel">{runLanguage === 'fr' ? 'New Rx delta' : 'New Rx delta'}</div>
+                  <ul className="glanceList">
+                    {atAGlance.rxDelta.map((item, idx) => (
+                      <li key={`rxdelta-${idx}`} className="glanceBullet">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            {demoMode ? (
+              <section className="panel">
+                <div className="panelTitleRow">
+                  <div className="panelTitle">Demo mode</div>
+                  <span className="badge">{activeDemoPreset.label}</span>
+                </div>
+                <div className="muted small">{activeDemoPreset.note}</div>
+                <div className="subTitle">What judges should notice</div>
+                <ul className="glanceList" data-testid="demo-checklist">
+                  {DEMO_CHECKLIST.map((item, idx) => (
+                    <li key={`check-${idx}`} className="glanceBullet">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             <section className="panel">
               <div className="panelTitle">Run</div>
               {run ? (
@@ -941,7 +1467,7 @@ function App() {
                   </div>
                   <div>
                     <span className="k">status</span>
-                    <span className="v" data-testid="run-status">
+                    <span className={`v statusBadge status-${run.status}`} data-testid="run-status">
                       {run.status}
                     </span>
                   </div>
@@ -1153,6 +1679,53 @@ function App() {
               )}
             </section>
 
+            <section className="panel" data-testid="planner-panel">
+              <div className="panelTitle">Plan card</div>
+              {!plannerPlan ? (
+                <div className="muted small">Planner disabled or not available for this run.</div>
+              ) : (
+                <>
+                  <div className="kv">
+                    <div>
+                      <span className="k">mode</span>
+                      <span className="v mono">{plannerPlan.mode}</span>
+                    </div>
+                    <div>
+                      <span className="k">fallback</span>
+                      <span className="v">{plannerPlan.fallback_used ? 'yes' : 'no'}</span>
+                    </div>
+                    <div>
+                      <span className="k">generated_at</span>
+                      <span className="v mono">{plannerPlan.generated_at}</span>
+                    </div>
+                  </div>
+                  <div className="subTitle">Safety checks</div>
+                  <ul className="glanceList">
+                    {plannerPlan.safety_checks.map((item, idx) => (
+                      <li key={`plan-safe-${idx}`} className="glanceBullet">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="subTitle">Steps</div>
+                  <div className="patientsList">
+                    {plannerPlan.steps.map((step) => (
+                      <div key={step.step_id} className="qCard">
+                        <div className="qHeader">
+                          <div className="qText">{step.title}</div>
+                          <span className="badge">{step.kind}</span>
+                        </div>
+                        <div className="qReason">{step.detail}</div>
+                        {step.evidence_refs.length > 0 ? (
+                          <div className="muted small mono">{step.evidence_refs.join(', ')}</div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+
             <section className="panel printPanel">
               <div className="panelTitleRow">
                 <div className="panelTitle">Artifacts</div>
@@ -1167,11 +1740,11 @@ function App() {
               </div>
               <div className="artifact">
                 <div className="artifactTitle">Report</div>
-                <pre className="mono pre">{run?.artifacts?.report_markdown ?? '—'}</pre>
+                <MarkdownArticle className="markdownArticle artifactReport" markdown={run?.artifacts?.report_markdown} />
               </div>
-              <div className="artifact">
+              <div className="artifact artifactHandout">
                 <div className="artifactTitle">Handout</div>
-                <pre className="mono pre">{run?.artifacts?.handout_markdown ?? '—'}</pre>
+                <MarkdownArticle className="markdownArticle" markdown={run?.artifacts?.handout_markdown} />
               </div>
             </section>
           </main>

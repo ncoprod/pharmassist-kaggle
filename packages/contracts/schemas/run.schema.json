@@ -88,6 +88,12 @@
           "type": "string",
           "maxLength": 20000
         },
+        "prebrief": {
+          "$ref": "pharmassist://contracts/prebrief.schema.json"
+        },
+        "plan": {
+          "$ref": "pharmassist://contracts/planner_plan.schema.json"
+        },
         "trace": {
           "$ref": "pharmassist://contracts/trace.schema.json"
         },

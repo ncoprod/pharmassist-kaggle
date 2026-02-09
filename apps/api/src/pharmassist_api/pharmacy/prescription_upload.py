@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import io
+import multiprocessing as mp
 import os
 import re
+import threading
 import uuid
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -35,24 +37,128 @@ def max_upload_bytes() -> int:
     return 5_000_000
 
 
+def max_pdf_pages() -> int:
+    raw = (os.getenv("PHARMASSIST_MAX_PRESCRIPTION_PAGES") or "").strip()
+    if raw.isdigit():
+        return max(1, min(int(raw), 500))
+    return 200
+
+
+def max_pdf_extract_seconds() -> float:
+    raw = (os.getenv("PHARMASSIST_MAX_PRESCRIPTION_EXTRACT_SEC") or "").strip()
+    try:
+        value = float(raw)
+    except ValueError:
+        return 4.0
+    return max(0.2, min(value, 30.0))
+
+
 def _sha256_12(data: bytes) -> str:
     return sha256(data).hexdigest()[:12]
 
 
-def _text_from_pdf_bytes(data: bytes, *, max_text_len: int = 50_000) -> tuple[str, str, int]:
-    reader = PdfReader(io.BytesIO(data))
+def _extract_pdf_text_impl(data: bytes, *, max_text_len: int) -> tuple[str, str, int]:
+    if not data.startswith(b"%PDF-"):
+        raise ValueError("Invalid PDF header")
+
+    reader = PdfReader(io.BytesIO(data), strict=False)
+    if getattr(reader, "is_encrypted", False):
+        raise ValueError("Encrypted PDF files are not supported")
+
     page_count = len(reader.pages)
+    if page_count > max_pdf_pages():
+        raise ValueError(f"PDF has too many pages (max {max_pdf_pages()})")
+
     chunks: list[str] = []
     for page in reader.pages:
         text = page.extract_text() or ""
         if text.strip():
             chunks.append(text)
+
     merged_full = "\n".join(chunks).strip()
-    if len(merged_full) > max_text_len:
-        merged_for_model = merged_full[:max_text_len]
-    else:
-        merged_for_model = merged_full
+    merged_for_model = (
+        merged_full[:max_text_len] if len(merged_full) > max_text_len else merged_full
+    )
     return merged_full, merged_for_model, page_count
+
+
+def _extract_pdf_text_worker(
+    data: bytes,
+    *,
+    max_text_len: int,
+    conn: Any,
+) -> None:
+    try:
+        conn.send(("ok", _extract_pdf_text_impl(data, max_text_len=max_text_len)))
+    except ValueError as e:
+        conn.send(("value_error", str(e)))
+    except Exception:
+        conn.send(("error", "unreadable_pdf"))
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _text_from_pdf_bytes(data: bytes, *, max_text_len: int = 50_000) -> tuple[str, str, int]:
+    timeout = max_pdf_extract_seconds()
+    if threading.active_count() > 1:
+        # Forking a multi-threaded process can deadlock; use spawn in that case.
+        ctx = mp.get_context("spawn")
+    else:
+        try:
+            ctx = mp.get_context("fork")
+        except ValueError:
+            # Fallback for platforms where fork is unavailable.
+            ctx = mp.get_context("spawn")
+
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
+    proc = ctx.Process(
+        target=_extract_pdf_text_worker,
+        kwargs={
+            "data": data,
+            "max_text_len": max_text_len,
+            "conn": child_conn,
+        },
+        daemon=True,
+    )
+    proc.start()
+    child_conn.close()
+
+    try:
+        if not parent_conn.poll(timeout):
+            raise ValueError("PDF extraction timed out")
+
+        try:
+            result = parent_conn.recv()
+        except EOFError:
+            raise ValueError("Invalid or unreadable PDF payload") from None
+
+        if not isinstance(result, tuple) or not result:
+            raise ValueError("Invalid or unreadable PDF payload")
+
+        if result[0] == "ok" and len(result) == 2:
+            payload = result[1]
+            if (
+                isinstance(payload, tuple)
+                and len(payload) == 3
+                and isinstance(payload[0], str)
+                and isinstance(payload[1], str)
+                and isinstance(payload[2], int)
+            ):
+                return payload
+            raise ValueError("Invalid or unreadable PDF payload")
+
+        if result[0] == "value_error" and len(result) == 2:
+            raise ValueError(str(result[1]) or "Invalid or unreadable PDF payload")
+
+        raise ValueError("Invalid or unreadable PDF payload")
+    finally:
+        parent_conn.close()
+        if proc.is_alive():
+            proc.terminate()
+        proc.join(timeout=0.2)
 
 
 def redact_phi_text(text: str) -> tuple[str, dict[str, Any]]:
@@ -108,8 +214,6 @@ def ingest_prescription_pdf(
     sha12 = _sha256_12(pdf_bytes)
 
     extracted_text_full, extracted_text, page_count = _text_from_pdf_bytes(pdf_bytes)
-    if page_count > 200:
-        raise ValueError("PDF has too many pages (max 200)")
     if not extracted_text_full:
         raise ValueError("PDF text-layer extraction returned empty text")
 

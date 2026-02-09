@@ -16,6 +16,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from pharmassist_api import db
+from pharmassist_api.analysis_refresh import (
+    get_patient_analysis_status,
+    get_patients_inbox,
+    queue_patient_refresh,
+    reset_analysis_refresh_state_for_tests,
+)
 from pharmassist_api.contracts.validate_schema import validate_instance
 from pharmassist_api.follow_up_answers import validate_and_canonicalize_follow_up_answers
 from pharmassist_api.orchestrator import dumps_sse, get_queue, new_run_with_answers, run_pipeline
@@ -37,6 +43,10 @@ class RunCreateRequest(BaseModel):
     language: Literal["fr", "en"] = "fr"
     trigger: Literal["manual", "import", "ocr_upload", "scheduled_refresh"] = "manual"
     follow_up_answers: list[FollowUpAnswer] | None = None
+
+
+class PatientRefreshRequest(BaseModel):
+    reason: str = "manual_refresh"
 
 
 @asynccontextmanager
@@ -240,6 +250,7 @@ def reset_admin_guard_state_for_tests() -> None:
         _ADMIN_RATE_BUCKETS.clear()
     with _STREAM_TOKEN_LOCK:
         _STREAM_TOKENS.clear()
+    reset_analysis_refresh_state_for_tests()
 
 
 def _provided_api_key(request: Request) -> str:
@@ -388,6 +399,17 @@ def search_patients(
     return {"patients": db.search_patients(query_prefix=q, limit=20)}
 
 
+@app.get("/patients/inbox")
+def patients_inbox(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/patients/inbox")
+    payload = get_patients_inbox(limit=limit)
+    validate_instance(payload, "patient_inbox")
+    return payload
+
+
 @app.get("/patients/{patient_ref}")
 def get_patient(request: Request, patient_ref: str) -> dict[str, Any]:
     _enforce_data_controls(request, endpoint="/patients/{patient_ref}")
@@ -406,6 +428,41 @@ def get_patient_visits(request: Request, patient_ref: str) -> dict[str, Any]:
     return {
         "patient_ref": patient_ref,
         "visits": db.list_patient_visits(patient_ref=patient_ref, limit=50),
+    }
+
+
+@app.get("/patients/{patient_ref}/analysis-status")
+def patient_analysis_status(request: Request, patient_ref: str) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/patients/{patient_ref}/analysis-status")
+    patient = db.get_patient(patient_ref)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    payload = get_patient_analysis_status(patient_ref=patient_ref)
+    validate_instance(payload, "patient_analysis_status")
+    return payload
+
+
+@app.post("/patients/{patient_ref}/refresh")
+async def refresh_patient_analysis(
+    request: Request,
+    patient_ref: str,
+    req: PatientRefreshRequest | None = None,
+) -> dict[str, Any]:
+    _enforce_data_controls(request, endpoint="/patients/{patient_ref}/refresh")
+    patient = db.get_patient(patient_ref)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    reason = req.reason if req else "manual_refresh"
+    queued = await queue_patient_refresh(patient_ref=patient_ref, reason=reason)
+    payload = get_patient_analysis_status(patient_ref=patient_ref)
+    validate_instance(payload, "patient_analysis_status")
+    return {
+        "schema_version": "0.0.0",
+        "patient_ref": patient_ref,
+        "accepted": True,
+        "queued": bool(queued.get("queued")),
+        "analysis_status": payload,
     }
 
 
@@ -516,6 +573,11 @@ async def upload_prescription_pdf(
             "event_payload_keys": sorted([k for k in event_payload.keys() if isinstance(k, str)]),
         },
     )
+    try:
+        await queue_patient_refresh(patient_ref=patient_ref_norm, reason="document_uploaded")
+    except Exception:
+        # Keep upload resilient even if refresh scheduling fails.
+        pass
 
     receipt = {
         "schema_version": "0.0.0",

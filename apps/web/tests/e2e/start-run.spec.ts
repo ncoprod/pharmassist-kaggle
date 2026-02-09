@@ -1,10 +1,35 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+async function searchAndOpenPatient(page: Page, patientRef: string): Promise<void> {
+  const searchInput = page.getByTestId('patient-search')
+  const searchButton = page.getByTestId('patient-search-btn')
+  const result = page.getByTestId(`patient-result-${patientRef}`)
+  const errorBanner = page.getByTestId('error-banner')
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await searchInput.fill(patientRef)
+    await searchButton.click()
+    try {
+      await expect(result).toBeVisible({ timeout: 5000 })
+      await result.click()
+      return
+    } catch {
+      const hasError = (await errorBanner.count()) > 0
+      const message = hasError ? ((await errorBanner.textContent()) ?? '').trim() : ''
+      if (attempt >= 3) {
+        const suffix = message ? ` Last UI error: ${message}` : ''
+        throw new Error(`Unable to open patient ${patientRef} after ${attempt} attempts.${suffix}`)
+      }
+      await page.waitForTimeout(300)
+    }
+  }
+}
 
 test('start run completes (default case)', async ({ page }) => {
   await page.goto('/')
@@ -93,7 +118,9 @@ test('red-flag case escalates and does not recommend products', async ({ page })
   await expect(runStatus).toHaveText('completed')
 
   // Escalation callout should be visible in the recommendation panel.
-  await expect(page.getByText('Escalade recommandee')).toBeVisible()
+  await expect(
+    page.getByTestId('recommendation-panel').getByText('Escalade recommandee'),
+  ).toBeVisible()
 
   // Safety: no products should be recommended when escalation is recommended.
   await expect(page.locator('.productCard')).toHaveCount(0)
@@ -103,12 +130,7 @@ test('patients flow: search -> open -> start run from visit', async ({ page }) =
   await page.goto('/')
 
   await page.getByTestId('tab-patients').click()
-
-  await page.getByTestId('patient-search').fill('pt_000000')
-  await page.getByTestId('patient-search-btn').click()
-
-  await expect(page.getByTestId('patient-result-pt_000000')).toBeVisible()
-  await page.getByTestId('patient-result-pt_000000').click()
+  await searchAndOpenPatient(page, 'pt_000000')
 
   await expect(page.getByTestId('patient-detail-ref')).toHaveText('pt_000000')
 
@@ -137,12 +159,11 @@ test('patients flow: upload prescription PDF and start run', async ({ page }) =>
   await page.goto('/')
 
   await page.getByTestId('tab-patients').click()
-  await page.getByTestId('patient-search').fill('pt_000000')
-  await page.getByTestId('patient-search-btn').click()
-  await page.getByTestId('patient-result-pt_000000').click()
+  await searchAndOpenPatient(page, 'pt_000000')
 
   const pdfPath = path.join(__dirname, '../fixtures/rx_phi_free.pdf')
   await page.getByTestId('patient-prescription-file').setInputFiles(pdfPath)
+  await expect(page.getByTestId('patient-prescription-file')).toHaveValue(/rx_phi_free\.pdf$/)
   await page.getByTestId('patient-prescription-upload-btn').click()
 
   await expect(page.locator('[data-testid="error-banner"]')).toHaveCount(0)
@@ -154,16 +175,51 @@ test('patients flow: upload prescription PDF and start run', async ({ page }) =>
   await expect(runStatus).toHaveText('completed')
 })
 
+test('patients flow: upload prescription PDF triggers auto refresh without manual run', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTestId('tab-patients').click()
+  await searchAndOpenPatient(page, 'pt_000000')
+
+  const pdfPath = path.join(__dirname, '../fixtures/rx_phi_free.pdf')
+  await page.getByTestId('patient-prescription-file').setInputFiles(pdfPath)
+  await expect(page.getByTestId('patient-prescription-file')).toHaveValue(/rx_phi_free\.pdf$/)
+  await page.getByTestId('patient-prescription-upload-btn').click()
+
+  await expect(page.locator('[data-testid="error-banner"]')).toHaveCount(0)
+  await expect(page.getByTestId('patient-prescription-receipt')).toBeVisible()
+
+  const status = page.getByTestId('analysis-status')
+  await expect(status).toBeVisible()
+  await expect(status).toHaveText('up_to_date', { timeout: 15000 })
+})
+
+test('patients flow: switching patient clears selected prescription file', async ({ page }) => {
+  await page.goto('/')
+
+  await page.getByTestId('tab-patients').click()
+  await searchAndOpenPatient(page, 'pt_000000')
+
+  const pdfPath = path.join(__dirname, '../fixtures/rx_phi_free.pdf')
+  await page.getByTestId('patient-prescription-file').setInputFiles(pdfPath)
+  await expect(page.getByTestId('patient-prescription-file')).toHaveValue(/rx_phi_free\.pdf$/)
+
+  await searchAndOpenPatient(page, 'pt_000001')
+
+  await expect(page.getByTestId('patient-prescription-file')).toHaveValue('')
+  await page.getByTestId('patient-prescription-upload-btn').click()
+  await expect(page.getByTestId('error-banner')).toContainText('Select a PDF file first.')
+})
+
 test('patients flow: upload PHI-like PDF is blocked', async ({ page }) => {
   await page.goto('/')
 
   await page.getByTestId('tab-patients').click()
-  await page.getByTestId('patient-search').fill('pt_000000')
-  await page.getByTestId('patient-search-btn').click()
-  await page.getByTestId('patient-result-pt_000000').click()
+  await searchAndOpenPatient(page, 'pt_000000')
 
   const pdfPath = path.join(__dirname, '../fixtures/rx_phi_present.pdf')
   await page.getByTestId('patient-prescription-file').setInputFiles(pdfPath)
+  await expect(page.getByTestId('patient-prescription-file')).toHaveValue(/rx_phi_present\.pdf$/)
   await page.getByTestId('patient-prescription-upload-btn').click()
 
   await expect(page.getByTestId('error-banner')).toContainText('PHI detected')
