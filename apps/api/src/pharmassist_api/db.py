@@ -1232,8 +1232,8 @@ def _preview_inventory(
     where = ""
     params: tuple[Any, ...] = ()
     if query:
-        where = "WHERE sku LIKE ?"
-        params = (f"{query}%",)
+        where = "WHERE sku LIKE ? OR product_json LIKE ?"
+        params = (f"{query}%", f"%{query}%")
 
     count = conn.execute(f"SELECT COUNT(1) AS c FROM inventory {where}", params).fetchone()
     rows = conn.execute(
