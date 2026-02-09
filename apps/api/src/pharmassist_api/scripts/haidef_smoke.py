@@ -204,11 +204,15 @@ def _run_conditional(model_id: str, prompt: str, *, max_new_tokens: int, debug: 
             model_id, torch_dtype=dtype, **model_kwargs
         )
 
+    processor_auth = _auth_kwargs()
     try:
         # Pin to the slow processor for stability (Transformers will change defaults).
-        processor = AutoProcessor.from_pretrained(model_id, use_fast=False)
+        processor = AutoProcessor.from_pretrained(
+            model_id, use_fast=False, **processor_auth
+        )
     except TypeError:
-        processor = AutoProcessor.from_pretrained(model_id)
+        # Older Transformers may not accept `use_fast` for this processor type.
+        processor = AutoProcessor.from_pretrained(model_id, **processor_auth)
 
     system = (
         "You are a medical information extraction system. "
